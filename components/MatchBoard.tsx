@@ -3,12 +3,7 @@
 import { useEffect, useState } from "react";
 import { MAX_COURTS } from "@/lib/constants";
 import { courtLetter, courtName } from "@/lib/courts";
-import {
-  averageRating,
-  effectiveGamesPlayed,
-  minimumPositiveGames,
-  playerRestTime,
-} from "@/lib/format";
+import { averageRating, playerRestTime } from "@/lib/format";
 import { getLevel, LEVELS } from "@/lib/levels";
 import type { AppState, CourtLayout, Match, MatchMode, Player } from "@/lib/types";
 import { Avatar } from "./Avatar";
@@ -311,10 +306,9 @@ export function MatchBoard({
   const total = roundMatches.length;
   const progress = total ? Math.round((completed / total) * 100) : 0;
 
-  // The court board is gated behind an explicit setup step. Setup is required
-  // whenever there is no round, or every match in the current round is done.
-  const roundComplete = Boolean(activeRound) && total > 0 && completed === total;
-  const needsSetup = !activeRound || total === 0 || roundComplete;
+  // Setup is the entry gate for the session. Once a round exists the queue
+  // continues automatically, even after every court has been scored.
+  const needsSetup = !activeRound;
   const setupCourts =
     layout === "single" ? Math.min(1, courtCapacity) : Math.min(courts, courtCapacity);
   const setupLineups =
@@ -331,11 +325,7 @@ export function MatchBoard({
       : setupCourts > 0
         ? `${setupCourts} court${setupCourts === 1 ? "" : "s"}`
         : "No courts available";
-  const startButtonLabel = generating
-    ? "Starting…"
-    : roundComplete
-      ? "Start next game"
-      : "Start game";
+  const startButtonLabel = generating ? "Starting…" : "Start game";
 
   const orderedMatches = [...roundMatches].sort(
     (a, b) =>
@@ -353,8 +343,8 @@ export function MatchBoard({
   const activeMatchIds = new Set(activeByCourt.values());
   const activeCount = activeByCourt.size;
   const queuedCount = scheduledMatches.filter((match) => !activeMatchIds.has(match.id)).length;
-  const singleCourtBoard =
-    Boolean(activeRound) && new Set(roundMatches.map((match) => match.court)).size === 1;
+  const roundCourtCount = new Set(roundMatches.map((match) => match.court)).size;
+  const singleCourtBoard = Boolean(activeRound) && roundCourtCount === 1;
   const displayedMatches = singleCourtBoard ? scheduledMatches.slice(0, 2) : scheduledMatches;
   const hasPendingCourt = scheduledMatches.length > 0;
   const scheduledPlayerIds = new Set(
@@ -363,7 +353,6 @@ export function MatchBoard({
       .map((player) => player.playerId),
   );
   const availablePool = players.filter((player) => !scheduledPlayerIds.has(player.id));
-  const minimumAvailableGames = minimumPositiveGames(availablePool);
   const finishedPriority = new Map<string, number>();
   if (!singleCourtBoard) {
     const completedMatches = roundMatches
@@ -393,6 +382,11 @@ export function MatchBoard({
   }
 
   const availablePlayers = availablePool.sort((a, b) => {
+    // Catch-up priority: late arrivals and players with fewer games go first.
+    const aGames = Math.max(0, a.gamesPlayed || 0);
+    const bGames = Math.max(0, b.gamesPlayed || 0);
+    if (aGames !== bGames) return aGames - bGames;
+
     if (!singleCourtBoard) {
       const aRank = finishedPriority.get(a.id);
       const bRank = finishedPriority.get(b.id);
@@ -402,10 +396,6 @@ export function MatchBoard({
         if (safeARank !== safeBRank) return safeARank - safeBRank;
       }
     }
-
-    const aGames = effectiveGamesPlayed(a.gamesPlayed, minimumAvailableGames);
-    const bGames = effectiveGamesPlayed(b.gamesPlayed, minimumAvailableGames);
-    if (aGames !== bGames) return aGames - bGames;
 
     const aRest = playerRestTime(a);
     const bRest = playerRestTime(b);

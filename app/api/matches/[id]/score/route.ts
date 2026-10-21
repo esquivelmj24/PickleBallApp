@@ -2,6 +2,7 @@ import { ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
 import { isValidScore, jsonError, readBody } from "@/lib/api";
 import { getDb, getMongoClient, type MatchDoc, type MatchPlayerDoc, type PlayerDoc } from "@/lib/db";
+import { advanceRoundIfComplete } from "@/lib/rounds";
 import { serializeMatch } from "@/lib/serializers";
 
 export const dynamic = "force-dynamic";
@@ -140,6 +141,15 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     if (!updatedMatch) return jsonError("Match not found.", 404);
+
+    // Once the last court is scored, the next queue is built automatically.
+    // The score is already committed, so an advance failure must not fail it.
+    try {
+      await advanceRoundIfComplete(db);
+    } catch (error) {
+      console.error("POST /api/matches/[id]/score auto-advance failed", error);
+    }
+
     return NextResponse.json(serializeMatch(updatedMatch));
   } catch (error) {
     if (error instanceof Error && error.message === "NOT_FOUND") {

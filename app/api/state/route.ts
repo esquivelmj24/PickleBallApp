@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb, type MatchDoc, type PlayerDoc } from "@/lib/db";
+import { advanceRoundIfComplete } from "@/lib/rounds";
 import { levelCounts, rankPlayers, serializeMatch, serializePlayer } from "@/lib/serializers";
 import type { AppState } from "@/lib/types";
 
@@ -9,6 +10,15 @@ export const runtime = "nodejs";
 export async function GET() {
   try {
     const db = await getDb();
+
+    // If the previous round is fully scored, build the next queue before
+    // returning the board. The session continues until the admin resets it.
+    try {
+      await advanceRoundIfComplete(db);
+    } catch (error) {
+      console.error("GET /api/state auto-advance failed", error);
+    }
+
     const playersCollection = db.collection<PlayerDoc>("players");
     const matchesCollection = db.collection<MatchDoc>("matches");
 

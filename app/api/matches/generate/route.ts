@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         const previousMatches = await matchesCollection
           .find({ roundId: latestMatch.roundId })
           .toArray();
-        priorityOrder = finishOrderPriority(previousMatches, players);
+        priorityOrder = finishOrderPriority(previousMatches);
       }
     }
 

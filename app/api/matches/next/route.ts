@@ -74,7 +74,7 @@ export async function POST() {
     // first, then the waiting list. Single-court mode keeps its fair queue.
     const priorityOrder = singleCourtRound
       ? null
-      : finishOrderPriority(roundMatches, available);
+      : finishOrderPriority(roundMatches);
     const round = buildRound(available, 1, mode, priorityOrder);
     if (round.pairings.length === 0) {
       return jsonError(

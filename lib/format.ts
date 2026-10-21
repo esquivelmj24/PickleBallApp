@@ -24,24 +24,11 @@ export function averageRating(players: { rating: number }[]): string {
 }
 
 /**
- * New players start with zero recorded games. For rotation priority, treat them
- * as if they already have the lowest positive play count so they do not jump
- * ahead of players who have already been waiting their turn.
+ * Players who arrived late or have played fewer games are catch-up priorities.
+ * Among players with the same play count, the longest rest comes first. For a
+ * player who has not played yet, createdAt is used as the rest anchor so the
+ * earliest-arriving zero-game player is served first.
  */
-export function minimumPositiveGames(players: { gamesPlayed: number }[]): number {
-  return players.reduce((minimum, player) => {
-    if (player.gamesPlayed > 0 && player.gamesPlayed < minimum) {
-      return player.gamesPlayed;
-    }
-    return minimum;
-  }, Number.POSITIVE_INFINITY);
-}
-
-export function effectiveGamesPlayed(gamesPlayed: number, minimumPositive: number): number {
-  if (gamesPlayed > 0) return gamesPlayed;
-  return Number.isFinite(minimumPositive) ? minimumPositive : 0;
-}
-
 export function playerRestTime(player: {
   lastPlayedAt: string | Date | null;
   createdAt: string | Date;

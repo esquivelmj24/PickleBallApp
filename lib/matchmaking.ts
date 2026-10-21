@@ -1,10 +1,6 @@
 import { randomUUID } from "crypto";
 import type { MatchDoc, PlayerDoc } from "./db";
-import {
-  effectiveGamesPlayed,
-  minimumPositiveGames,
-  playerRestTime,
-} from "./format";
+import { playerRestTime } from "./format";
 import { getLevel, LEVELS, type LevelKey } from "./levels";
 import type { MatchMode } from "./types";
 
@@ -57,9 +53,15 @@ function fairOrder(
   players: PlayerDoc[],
   priorityOrder?: Map<string, number> | null,
 ): PlayerDoc[] {
-  const minimumPositive = minimumPositiveGames(players);
-
   return shuffle(players).sort((a, b) => {
+    // Catch-up priority: players who missed games (especially late arrivals
+    // with 0 games) go before players with more games.
+    const aGames = Math.max(0, a.gamesPlayed || 0);
+    const bGames = Math.max(0, b.gamesPlayed || 0);
+    if (aGames !== bGames) return aGames - bGames;
+
+    // Within the same play count, players who finished their previous match
+    // first are ranked first.
     if (priorityOrder) {
       const aRank = priorityOrder.get(a._id.toString());
       const bRank = priorityOrder.get(b._id.toString());
@@ -70,10 +72,6 @@ function fairOrder(
       }
     }
 
-    const aGames = effectiveGamesPlayed(a.gamesPlayed, minimumPositive);
-    const bGames = effectiveGamesPlayed(b.gamesPlayed, minimumPositive);
-    if (aGames !== bGames) return aGames - bGames;
-
     const aRest = playerRestTime(a);
     const bRest = playerRestTime(b);
     if (aRest !== bRest) return aRest - bRest;
@@ -82,17 +80,11 @@ function fairOrder(
 }
 
 /**
- * Multiple-court shuffle priority:
- * 1. Players from completed matches, earliest completion first.
- * 2. Players who were waiting, ordered by fewest games and longest rest.
- *
- * The returned rank map is passed into the normal level/open pairing logic so
- * rating bands and balanced teams still apply.
+ * Rank the players who just finished a match by completion time. The rank map
+ * is used as a tie-breaker inside the same play-count group, so late arrivals
+ * and low-game players still get their catch-up priority first.
  */
-export function finishOrderPriority(
-  previousMatches: MatchDoc[],
-  players: PlayerDoc[],
-): Map<string, number> | null {
+export function finishOrderPriority(previousMatches: MatchDoc[]): Map<string, number> | null {
   const completed = previousMatches
     .filter((match) => match.status === "completed")
     .sort((a, b) => {
@@ -120,24 +112,6 @@ export function finishOrderPriority(
         rank += 1;
       }
     }
-  }
-
-  const waitingPool = players.filter((player) => !priority.has(player._id.toString()));
-  const minimumPositive = minimumPositiveGames(waitingPool);
-  const waiting = waitingPool.sort((a, b) => {
-    const aGames = effectiveGamesPlayed(a.gamesPlayed || 0, minimumPositive);
-    const bGames = effectiveGamesPlayed(b.gamesPlayed || 0, minimumPositive);
-    if (aGames !== bGames) return aGames - bGames;
-
-    const aRest = playerRestTime(a);
-    const bRest = playerRestTime(b);
-    if (aRest !== bRest) return aRest - bRest;
-    return a.name.localeCompare(b.name);
-  });
-
-  for (const player of waiting) {
-    priority.set(player._id.toString(), rank);
-    rank += 1;
   }
 
   return priority;
