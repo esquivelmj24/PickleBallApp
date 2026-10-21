@@ -78,6 +78,19 @@ export async function POST(request: Request, context: RouteContext) {
         const match = await matches.findOne({ _id: matchId }, { session });
         if (!match) throw new Error("NOT_FOUND");
 
+        if (match.status === "scheduled") {
+          const earlierScheduled = await matches.findOne(
+            {
+              roundId: match.roundId,
+              court: match.court,
+              status: "scheduled",
+              queuePosition: { $lt: match.queuePosition ?? 1 },
+            },
+            { session },
+          );
+          if (earlierScheduled) throw new Error("QUEUED");
+        }
+
         const now = new Date();
 
         if (match.status === "completed" && match.team1Score !== null && match.team2Score !== null) {
@@ -131,6 +144,12 @@ export async function POST(request: Request, context: RouteContext) {
   } catch (error) {
     if (error instanceof Error && error.message === "NOT_FOUND") {
       return jsonError("Match not found.", 404);
+    }
+    if (error instanceof Error && error.message === "QUEUED") {
+      return jsonError(
+        "Finish the current court before scoring the Next Player group.",
+        409,
+      );
     }
     console.error("POST /api/matches/[id]/score failed", error);
     return jsonError("Could not save the score.", 500);

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AppState, Match, MatchMode, Player } from "@/lib/types";
+import { courtDisplayName } from "@/lib/courts";
+import type { AppState, CourtLayout, Match, MatchMode, Player } from "@/lib/types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { LineupModal } from "./LineupModal";
 import { MatchBoard } from "./MatchBoard";
@@ -111,28 +112,58 @@ export function Dashboard() {
     );
   }
 
-  async function handleGenerate(courts: number, mode: MatchMode) {
-    const result = await apiRequest<{ waiting: number; queued: number }>("/api/matches/generate", {
+  async function handleGenerate(layout: CourtLayout, courts: number, mode: MatchMode) {
+    const result = await apiRequest<{
+      waiting: number;
+      courts: number;
+      queued: number;
+      layout: CourtLayout;
+    }>("/api/matches/generate", {
       method: "POST",
-      body: JSON.stringify({ courts, mode }),
+      body: JSON.stringify({ courts, mode, layout }),
     });
     await loadState();
-    const label = mode === "open" ? "Open rate rotation" : "Level rotation";
-    showToast(
-      result.queued > 0
-        ? `${label} built. ${result.queued} next lineup${
-            result.queued === 1 ? "" : "s"
-          } queued on Court 01.`
-        : result.waiting > 0
-          ? `${label} built. ${result.waiting} player${
-              result.waiting === 1 ? "" : "s"
-            } waiting for a court.`
-          : `${label} built — every player is on a court.`,
-    );
+    const label = mode === "open" ? "Open Rate" : "Level";
+    const details: string[] = [];
+    if (layout === "single") {
+      details.push("Court + Next Player built");
+    } else {
+      details.push(
+        `${result.courts} court${result.courts === 1 ? "" : "s"} built`,
+      );
+      details.push("First finishers ranked first");
+    }
+    if (result.waiting > 0) {
+      details.push(
+        `${result.waiting} player${result.waiting === 1 ? "" : "s"} waiting`,
+      );
+    }
+    showToast(`${label} rotation — ${details.join(" · ")}.`);
 
     window.setTimeout(() => {
       document.getElementById("rotation")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
+  }
+
+  async function handleAddNextLineup() {
+    const result = await apiRequest<{
+      court: number;
+      queuePosition: number;
+      queued: boolean;
+      waiting: number;
+    }>("/api/matches/next", {
+      method: "POST",
+    });
+    await loadState();
+    showToast(
+      result.queued
+        ? `Next Player queued${
+            result.waiting > 0 ? ` · ${result.waiting} still available` : ""
+          }.`
+        : `${courtDisplayName(result.court)} added${
+            result.waiting > 0 ? ` · ${result.waiting} still available` : ""
+          }.`,
+    );
   }
 
   async function handleSaveScore(matchId: string, team1Score: number, team2Score: number) {
@@ -151,7 +182,7 @@ export function Dashboard() {
       body: JSON.stringify({ team1, team2 }),
     });
     setLineupMatch(null);
-    showToast(`Court ${lineupMatch.court} lineup updated.`);
+    showToast(`${lineupCourtLabel} lineup updated.`);
     await loadState();
   }
 
@@ -173,13 +204,32 @@ export function Dashboard() {
     if (!lineupMatch || !state?.activeRound) return occupied;
 
     state.activeRound.matches.forEach((match) => {
-      if (match.id === lineupMatch.id) return;
+      if (match.id === lineupMatch.id || match.status !== "scheduled") return;
       [...match.team1, ...match.team2].forEach((player) => {
         occupied.set(player.playerId, match.court);
       });
     });
     return occupied;
   }, [lineupMatch, state]);
+
+  const lineupQueued = useMemo(() => {
+    if (!lineupMatch || !state?.activeRound) return false;
+    const nextScheduled = state.activeRound.matches
+      .filter((match) => match.court === lineupMatch.court && match.status === "scheduled")
+      .sort((a, b) => a.queuePosition - b.queuePosition)[0];
+    return Boolean(nextScheduled && nextScheduled.id !== lineupMatch.id);
+  }, [lineupMatch, state]);
+
+  const lineupSingleCourt = useMemo(() => {
+    if (!state?.activeRound) return true;
+    return new Set(state.activeRound.matches.map((match) => match.court)).size <= 1;
+  }, [state]);
+
+  const lineupCourtLabel = useMemo(() => {
+    if (!lineupMatch) return "Court";
+    if (lineupQueued) return "Next Player";
+    return lineupSingleCourt ? "Court" : courtDisplayName(lineupMatch.court);
+  }, [lineupMatch, lineupQueued, lineupSingleCourt]);
 
   if (loading) return <LoadingScreen />;
 
@@ -208,16 +258,16 @@ export function Dashboard() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Dinkboard home">
+        <a className="brand" href="#top" aria-label="Pickle & Chill home">
           <span className="brand-ball"><LogoBall size={38} /></span>
           <span className="brand-copy">
-            <strong>DINKBOARD</strong>
+            <strong>PICKLE &amp; CHILL</strong>
             <small>Committee console</small>
           </span>
         </a>
 
         <nav className="main-nav" aria-label="Main navigation">
-          <a href="#rotation">Match night</a>
+          <a href="#rotation">Live rotation</a>
           <a href="#players">Players</a>
           <a href="#top-five-title">Leaderboard</a>
         </nav>
@@ -252,8 +302,8 @@ export function Dashboard() {
               <span>Better games.</span>
             </h1>
             <p className="hero-lede">
-              Rate every player, build level-matched courts, and keep the leaderboard honest.
-              Everyone gets a game before anyone gets a repeat.
+              Rate every player, build level-matched or Open Rate courts, and keep the leaderboard
+              honest. Everyone gets a game before anyone gets a repeat.
             </p>
             <div className="hero-actions">
               <button
@@ -268,7 +318,7 @@ export function Dashboard() {
                 }}
               >
                 {stats.totalPlayers < 4 ? <PlusIcon size={18} /> : <SparklesIcon size={18} />}
-                {stats.totalPlayers < 4 ? "Build your roster" : "Go to match night"}
+                {stats.totalPlayers < 4 ? "Build your roster" : "Go to rotation"}
                 <ArrowUpRightIcon size={17} />
               </button>
               <button
@@ -280,8 +330,8 @@ export function Dashboard() {
               </button>
             </div>
             <div className="hero-proof">
-              <span><CheckIcon size={14} /> Unique names per round</span>
-              <span><CheckIcon size={14} /> Level-matched auto courts</span>
+              <span><CheckIcon size={14} /> No player on two active courts</span>
+              <span><CheckIcon size={14} /> Level or Open Rate courts</span>
               <span><CheckIcon size={14} /> Fair play counts</span>
             </div>
           </div>
@@ -294,7 +344,7 @@ export function Dashboard() {
             </div>
             <div className="night-card-head">
               <div>
-                <span className="eyebrow eyebrow-light">Tonight&apos;s board</span>
+                <span className="eyebrow eyebrow-light">Live board</span>
                 <h2>{state.activeRound?.scheduled ? "Rotation in play" : "Ready for first serve"}</h2>
               </div>
               <span className="live-chip"><span /> Live</span>
@@ -356,7 +406,7 @@ export function Dashboard() {
           </div>
           <div className="stat-card">
             <span className="stat-icon stat-icon-dark"><LogoBall size={21} /></span>
-            <div><strong>{stats.gamesAvailable}</strong><span>Full courts ready</span></div>
+            <div><strong>{stats.gamesAvailable}</strong><span>Full level courts</span></div>
           </div>
         </div>
 
@@ -366,6 +416,7 @@ export function Dashboard() {
               players={state.players}
               activeRound={state.activeRound}
               onGenerate={handleGenerate}
+              onAddNextLineup={handleAddNextLineup}
               onSaveScore={handleSaveScore}
               onEditLineup={setLineupMatch}
               onAddPlayer={() => setPlayerModal({ mode: "add" })}
@@ -398,7 +449,7 @@ export function Dashboard() {
         <footer className="site-footer">
           <div className="footer-brand">
             <LogoBall size={28} />
-            <span>Dinkboard</span>
+            <span>Pickle &amp; Chill</span>
           </div>
           <p>Built for fair play, balanced courts, and more time dinking.</p>
           <div className="footer-meta">
@@ -421,6 +472,7 @@ export function Dashboard() {
         <LineupModal
           match={lineupMatch}
           players={state.players}
+          courtLabel={lineupCourtLabel}
           occupiedByCourt={occupiedByCourt}
           onClose={() => setLineupMatch(null)}
           onSubmit={handleLineupSubmit}
@@ -474,7 +526,7 @@ function LoadingScreen() {
         <div className="brand">
           <span className="brand-ball"><LogoBall size={38} /></span>
           <span className="brand-copy">
-            <strong>DINKBOARD</strong>
+            <strong>PICKLE &amp; CHILL</strong>
             <small>Committee console</small>
           </span>
         </div>

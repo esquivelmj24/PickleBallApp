@@ -9,6 +9,7 @@ import { AlertIcon, CheckIcon, LockIcon, XIcon } from "./icons";
 type LineupModalProps = {
   match: Match;
   players: Player[];
+  courtLabel: string;
   occupiedByCourt: Map<string, number>;
   onClose: () => void;
   onSubmit: (team1: string[], team2: string[]) => Promise<void>;
@@ -23,7 +24,14 @@ const SLOTS: Slot[] = [
   { team: 2, index: 1, label: "Team B · Player 2" },
 ];
 
-export function LineupModal({ match, players, occupiedByCourt, onClose, onSubmit }: LineupModalProps) {
+export function LineupModal({
+  match,
+  players,
+  courtLabel,
+  occupiedByCourt,
+  onClose,
+  onSubmit,
+}: LineupModalProps) {
   const [team1, setTeam1] = useState<string[]>([
     match.team1[0]?.playerId ?? "",
     match.team1[1]?.playerId ?? "",
@@ -101,10 +109,7 @@ export function LineupModal({ match, players, occupiedByCourt, onClose, onSubmit
         <div className="modal-head">
           <div>
             <span className="eyebrow">
-              Committee override ·{" "}
-              {match.queuePosition > 1
-                ? `Next lineup · Court ${match.court}`
-                : `Court ${match.court}`}
+              Committee override · {courtLabel}
             </span>
             <h2 id="lineup-modal-title">Change the lineup</h2>
           </div>
@@ -115,8 +120,8 @@ export function LineupModal({ match, players, occupiedByCourt, onClose, onSubmit
 
         <p className="modal-intro">
           Swap in any available roster player. Rating bands are not enforced for manual
-          changes. Players already assigned to another lineup this round are locked until that
-          lineup is changed.
+          changes. Players already assigned to another active court are locked until that
+          lineup is changed. Players on completed courts are available again.
         </p>
 
         <form onSubmit={handleSubmit}>

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Dinkboard — Pickleball Leveling Console",
+  title: "Pickle & Chill — Pickleball Leveling Console",
   description:
     "Committee tool for rating players, building balanced pickleball courts, and tracking fair rotations.",
 };
@@ -16,7 +16,13 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <div className="site-backdrop" aria-hidden>
+          <span className="site-backdrop-image" />
+          <span className="site-backdrop-wash" />
+        </div>
+        {children}
+      </body>
     </html>
   );
 }

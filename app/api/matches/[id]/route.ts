@@ -41,6 +41,19 @@ export async function PATCH(request: Request, context: RouteContext) {
       return jsonError("Completed matches cannot be edited. Update the score instead.", 409);
     }
 
+    const queuedAhead = await matches.findOne({
+      roundId: match.roundId,
+      court: match.court,
+      status: "scheduled",
+      queuePosition: { $lt: match.queuePosition ?? 1 },
+    });
+    if (queuedAhead) {
+      return jsonError(
+        "The next lineup is locked until the current court result is saved.",
+        409,
+      );
+    }
+
     const playerIds = allIds.map((playerId) => new ObjectId(playerId));
     const players = await db
       .collection<PlayerDoc>("players")

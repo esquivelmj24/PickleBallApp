@@ -1,5 +1,10 @@
 import { randomUUID } from "crypto";
-import type { PlayerDoc } from "./db";
+import type { MatchDoc, PlayerDoc } from "./db";
+import {
+  effectiveGamesPlayed,
+  minimumPositiveGames,
+  playerRestTime,
+} from "./format";
 import { getLevel, LEVELS, type LevelKey } from "./levels";
 import type { MatchMode } from "./types";
 
@@ -48,13 +53,94 @@ function splitTeams(group: PlayerDoc[]): { team1: PlayerDoc[]; team2: PlayerDoc[
   };
 }
 
-function fairOrder(players: PlayerDoc[]): PlayerDoc[] {
+function fairOrder(
+  players: PlayerDoc[],
+  priorityOrder?: Map<string, number> | null,
+): PlayerDoc[] {
+  const minimumPositive = minimumPositiveGames(players);
+
   return shuffle(players).sort((a, b) => {
-    if (a.gamesPlayed !== b.gamesPlayed) return a.gamesPlayed - b.gamesPlayed;
-    const aLastPlayed = a.lastPlayedAt?.getTime() ?? 0;
-    const bLastPlayed = b.lastPlayedAt?.getTime() ?? 0;
-    return aLastPlayed - bLastPlayed;
+    if (priorityOrder) {
+      const aRank = priorityOrder.get(a._id.toString());
+      const bRank = priorityOrder.get(b._id.toString());
+      if (aRank !== undefined || bRank !== undefined) {
+        const safeARank = aRank ?? Number.MAX_SAFE_INTEGER;
+        const safeBRank = bRank ?? Number.MAX_SAFE_INTEGER;
+        if (safeARank !== safeBRank) return safeARank - safeBRank;
+      }
+    }
+
+    const aGames = effectiveGamesPlayed(a.gamesPlayed, minimumPositive);
+    const bGames = effectiveGamesPlayed(b.gamesPlayed, minimumPositive);
+    if (aGames !== bGames) return aGames - bGames;
+
+    const aRest = playerRestTime(a);
+    const bRest = playerRestTime(b);
+    if (aRest !== bRest) return aRest - bRest;
+    return a.name.localeCompare(b.name);
   });
+}
+
+/**
+ * Multiple-court shuffle priority:
+ * 1. Players from completed matches, earliest completion first.
+ * 2. Players who were waiting, ordered by fewest games and longest rest.
+ *
+ * The returned rank map is passed into the normal level/open pairing logic so
+ * rating bands and balanced teams still apply.
+ */
+export function finishOrderPriority(
+  previousMatches: MatchDoc[],
+  players: PlayerDoc[],
+): Map<string, number> | null {
+  const completed = previousMatches
+    .filter((match) => match.status === "completed")
+    .sort((a, b) => {
+      const aCompleted =
+        a.completedAt?.getTime() ?? a.updatedAt?.getTime() ?? a.createdAt.getTime();
+      const bCompleted =
+        b.completedAt?.getTime() ?? b.updatedAt?.getTime() ?? b.createdAt.getTime();
+      return (
+        aCompleted - bCompleted ||
+        a.court - b.court ||
+        (a.queuePosition ?? 1) - (b.queuePosition ?? 1)
+      );
+    });
+
+  if (completed.length === 0) return null;
+
+  const priority = new Map<string, number>();
+  let rank = 0;
+
+  for (const match of completed) {
+    for (const player of [...match.team1, ...match.team2]) {
+      const playerId = player.playerId.toString();
+      if (!priority.has(playerId)) {
+        priority.set(playerId, rank);
+        rank += 1;
+      }
+    }
+  }
+
+  const waitingPool = players.filter((player) => !priority.has(player._id.toString()));
+  const minimumPositive = minimumPositiveGames(waitingPool);
+  const waiting = waitingPool.sort((a, b) => {
+    const aGames = effectiveGamesPlayed(a.gamesPlayed || 0, minimumPositive);
+    const bGames = effectiveGamesPlayed(b.gamesPlayed || 0, minimumPositive);
+    if (aGames !== bGames) return aGames - bGames;
+
+    const aRest = playerRestTime(a);
+    const bRest = playerRestTime(b);
+    if (aRest !== bRest) return aRest - bRest;
+    return a.name.localeCompare(b.name);
+  });
+
+  for (const player of waiting) {
+    priority.set(player._id.toString(), rank);
+    rank += 1;
+  }
+
+  return priority;
 }
 
 export function levelCourtCapacity(players: PlayerDoc[]): number {
@@ -64,13 +150,20 @@ export function levelCourtCapacity(players: PlayerDoc[]): number {
   }, 0);
 }
 
-function buildLevelPairings(players: PlayerDoc[], lineupCount: number): CourtPairing[] {
+function buildLevelPairings(
+  players: PlayerDoc[],
+  lineupCount: number,
+  priorityOrder?: Map<string, number> | null,
+): CourtPairing[] {
   const pools = new Map<LevelKey, PlayerDoc[]>();
 
   for (const level of LEVELS) {
     pools.set(
       level.key,
-      fairOrder(players.filter((player) => getLevel(player.rating).key === level.key)),
+      fairOrder(
+        players.filter((player) => getLevel(player.rating).key === level.key),
+        priorityOrder,
+      ),
     );
   }
 
@@ -129,8 +222,12 @@ function buildLevelPairings(players: PlayerDoc[], lineupCount: number): CourtPai
   return pairings;
 }
 
-function buildOpenPairings(players: PlayerDoc[], lineupCount: number): CourtPairing[] {
-  const selected = fairOrder(players).slice(0, lineupCount * 4);
+function buildOpenPairings(
+  players: PlayerDoc[],
+  lineupCount: number,
+  priorityOrder?: Map<string, number> | null,
+): CourtPairing[] {
+  const selected = fairOrder(players, priorityOrder).slice(0, lineupCount * 4);
   const pairings: CourtPairing[] = [];
 
   for (let index = 0; index < selected.length; index += 4) {
@@ -167,12 +264,13 @@ export function buildRound(
   players: PlayerDoc[],
   lineupCount: number,
   mode: MatchMode = "level",
+  priorityOrder?: Map<string, number> | null,
 ) {
   const safeLineupCount = Math.max(0, Math.floor(lineupCount));
   const pairings =
     mode === "open"
-      ? buildOpenPairings(players, safeLineupCount)
-      : buildLevelPairings(players, safeLineupCount);
+      ? buildOpenPairings(players, safeLineupCount, priorityOrder)
+      : buildLevelPairings(players, safeLineupCount, priorityOrder);
 
   return {
     roundId: randomUUID(),

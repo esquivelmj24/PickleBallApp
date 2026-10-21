@@ -25,6 +25,8 @@ export type MatchPlayer = {
 
 export type MatchMode = "level" | "open";
 
+export type CourtLayout = "single" | "multiple";
+
 export type Match = {
   id: string;
   roundId: string;

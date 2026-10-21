@@ -1,15 +1,23 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { averageRating } from "@/lib/format";
+import { MAX_COURTS } from "@/lib/constants";
+import { courtLetter, courtName } from "@/lib/courts";
+import {
+  averageRating,
+  effectiveGamesPlayed,
+  minimumPositiveGames,
+  playerRestTime,
+} from "@/lib/format";
 import { getLevel, LEVELS } from "@/lib/levels";
-import type { AppState, Match, MatchMode, Player } from "@/lib/types";
+import type { AppState, CourtLayout, Match, MatchMode, Player } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import {
   AlertIcon,
   CheckIcon,
   ClockIcon,
   CourtIcon,
+  LockIcon,
   MinusIcon,
   PencilIcon,
   PlusIcon,
@@ -20,7 +28,8 @@ import {
 type MatchBoardProps = {
   players: Player[];
   activeRound: AppState["activeRound"];
-  onGenerate: (courts: number, mode: MatchMode) => Promise<void>;
+  onGenerate: (layout: CourtLayout, courts: number, mode: MatchMode) => Promise<void>;
+  onAddNextLineup: () => Promise<void>;
   onSaveScore: (matchId: string, team1Score: number, team2Score: number) => Promise<void>;
   onEditLineup: (match: Match) => void;
   onAddPlayer: () => void;
@@ -29,12 +38,13 @@ type MatchBoardProps = {
 type CourtCardProps = {
   match: Match;
   queued: boolean;
+  singleCourt: boolean;
   saving: boolean;
   onSaveScore: (matchId: string, team1Score: number, team2Score: number) => Promise<void>;
   onEditLineup: (match: Match) => void;
 };
 
-function CourtCard({ match, queued, saving, onSaveScore, onEditLineup }: CourtCardProps) {
+function CourtCard({ match, queued, singleCourt, saving, onSaveScore, onEditLineup }: CourtCardProps) {
   const [score1, setScore1] = useState(match.team1Score?.toString() ?? "");
   const [score2, setScore2] = useState(match.team2Score?.toString() ?? "");
   const [error, setError] = useState("");
@@ -80,15 +90,18 @@ function CourtCard({ match, queued, saving, onSaveScore, onEditLineup }: CourtCa
   const courtLevel = getLevel(courtPlayers[0]?.rating ?? 2);
   const levelColor = isOpenRate ? "#21618C" : mixedLevels ? "#B06B18" : courtLevel.color;
   const levelSoft = isOpenRate ? "#EAF4FB" : mixedLevels ? "#FFF1DB" : courtLevel.soft;
-  const courtNumber = String(match.court).padStart(2, "0");
+  const activeCourtName = courtName(match.court, singleCourt);
+  const cardName = queued ? "Next Player" : activeCourtName;
 
   return (
     <article className={`court-card ${completed ? "is-completed" : ""} ${queued ? "is-queued" : ""}`}>
       <div className="court-card-top">
         <div className="court-label">
           <CourtIcon size={16} />
-          <span>{queued ? "Next lineup" : `Court ${courtNumber}`}</span>
-          {queued ? <span className="queue-court-tag">Court {courtNumber}</span> : null}
+          <span>{cardName}</span>
+          {queued && !singleCourt ? (
+            <span className="queue-court-tag">{activeCourtName}</span>
+          ) : null}
         </div>
         <div className="court-top-tags">
           <span
@@ -96,19 +109,19 @@ function CourtCard({ match, queued, saving, onSaveScore, onEditLineup }: CourtCa
             style={{ color: levelColor, background: levelSoft }}
             title={
               isOpenRate
-                ? "Open rate court — rating bands are intentionally mixed"
+                ? "Open Rate court — rating bands are intentionally mixed"
                 : mixedLevels
                   ? "Mixed rating bands from a committee lineup override"
                   : "Automatic level-matched court"
             }
           >
             <span className="level-dot" style={{ background: levelColor }} />
-            {isOpenRate ? "Open rate" : mixedLevels ? "Mixed levels" : courtLevel.label}
+            {isOpenRate ? "Open Rate" : mixedLevels ? "Mixed levels" : courtLevel.label}
           </span>
           <span className={`match-status ${completed ? "is-final" : ""} ${queued ? "is-queued" : ""}`}>
             {queued ? (
               <>
-                <ClockIcon size={13} /> Queued
+                <ClockIcon size={13} /> {singleCourt ? "Next up" : "Queued"}
               </>
             ) : completed ? (
               <>
@@ -167,17 +180,14 @@ function CourtCard({ match, queued, saving, onSaveScore, onEditLineup }: CourtCa
           <>
             <span className="queue-note">
               <ClockIcon size={13} />
-              Up next on Court {courtNumber}
+              {singleCourt ? "Next group on Court" : `Up next on ${activeCourtName}`}
             </span>
-            <button
-              type="button"
-              className="lineup-btn"
-              onClick={() => onEditLineup(match)}
-              title="Committee override — change players"
-            >
-              <PencilIcon size={14} />
-              Change lineup
-            </button>
+            <span className="queue-lock">
+              <LockIcon size={13} />
+              {singleCourt
+                ? "Locked until Court is clear"
+                : `Locked until ${activeCourtName} is clear`}
+            </span>
           </>
         ) : (
           <>
@@ -191,7 +201,7 @@ function CourtCard({ match, queued, saving, onSaveScore, onEditLineup }: CourtCa
                 inputMode="numeric"
                 value={score1}
                 onChange={(event) => setScore1(event.target.value)}
-                aria-label={`Court ${match.court} team A score`}
+                aria-label={`${cardName} team A score`}
               />
               <span className="score-colon">:</span>
               <input
@@ -202,7 +212,7 @@ function CourtCard({ match, queued, saving, onSaveScore, onEditLineup }: CourtCa
                 inputMode="numeric"
                 value={score2}
                 onChange={(event) => setScore2(event.target.value)}
-                aria-label={`Court ${match.court} team B score`}
+                aria-label={`${cardName} team B score`}
               />
               <button
                 type="button"
@@ -248,11 +258,13 @@ export function MatchBoard({
   players,
   activeRound,
   onGenerate,
+  onAddNextLineup,
   onSaveScore,
   onEditLineup,
   onAddPlayer,
 }: MatchBoardProps) {
   const [mode, setMode] = useState<MatchMode>("level");
+  const [layout, setLayout] = useState<CourtLayout>("single");
   const tierSummary = LEVELS.map((level) => {
     const count = players.filter((player) => player.level === level.key).length;
     return {
@@ -265,9 +277,10 @@ export function MatchBoard({
   const levelCapacity = tierSummary.reduce((total, tier) => total + tier.capacity, 0);
   const openCapacity = Math.floor(players.length / 4);
   const courtCapacity = mode === "open" ? openCapacity : levelCapacity;
-  const maxCourts = Math.max(1, courtCapacity);
-  const [courts, setCourts] = useState(() => Math.max(1, courtCapacity));
+  const maxCourts = Math.min(MAX_COURTS, Math.max(1, courtCapacity));
+  const [courts, setCourts] = useState(1);
   const [generating, setGenerating] = useState(false);
+  const [addingNext, setAddingNext] = useState(false);
   const [savingMatchId, setSavingMatchId] = useState<string | null>(null);
   const [boardError, setBoardError] = useState("");
 
@@ -276,11 +289,20 @@ export function MatchBoard({
   }, [maxCourts]);
 
   useEffect(() => {
-    if (activeRound) setMode(activeRound.mode);
+    if (!activeRound) return;
+    setMode(activeRound.mode);
+    const roundCourtCount = new Set(activeRound.matches.map((match) => match.court)).size;
+    if (roundCourtCount > 1) {
+      setLayout("multiple");
+      setCourts(Math.min(roundCourtCount, MAX_COURTS));
+    } else {
+      setLayout("single");
+      setCourts(1);
+    }
   }, [activeRound?.roundId, activeRound?.mode]);
 
-  const hasPlayers = players.length >= 4;
   const canAutoMatch = courtCapacity > 0;
+  const minCourts = layout === "multiple" ? Math.min(2, maxCourts) : 1;
   const closestTier = [...tierSummary]
     .filter((tier) => tier.count > 0)
     .sort((a, b) => a.shortage - b.shortage)[0];
@@ -289,43 +311,177 @@ export function MatchBoard({
   const total = roundMatches.length;
   const progress = total ? Math.round((completed / total) * 100) : 0;
 
+  // The court board is gated behind an explicit setup step. Setup is required
+  // whenever there is no round, or every match in the current round is done.
+  const roundComplete = Boolean(activeRound) && total > 0 && completed === total;
+  const needsSetup = !activeRound || total === 0 || roundComplete;
+  const setupCourts =
+    layout === "single" ? Math.min(1, courtCapacity) : Math.min(courts, courtCapacity);
+  const setupLineups =
+    layout === "single" ? Math.min(courtCapacity, 2) : setupCourts;
+  const setupPlayers = Math.max(0, setupLineups * 4);
+  const setupWaiting = Math.max(0, players.length - setupPlayers);
+  const setupCourtText =
+    layout === "single"
+      ? setupLineups > 0
+        ? setupLineups >= 2
+          ? "1 Court + Next Player"
+          : "1 Court"
+        : "No court available"
+      : setupCourts > 0
+        ? `${setupCourts} court${setupCourts === 1 ? "" : "s"}`
+        : "No courts available";
+  const startButtonLabel = generating
+    ? "Starting…"
+    : roundComplete
+      ? "Start next game"
+      : "Start game";
+
   const orderedMatches = [...roundMatches].sort(
     (a, b) =>
       a.court - b.court ||
       a.queuePosition - b.queuePosition ||
       a.createdAt.localeCompare(b.createdAt),
   );
+  const scheduledMatches = orderedMatches.filter((match) => match.status === "scheduled");
   const activeByCourt = new Map<number, string>();
-  for (const match of orderedMatches) {
-    if (match.status === "scheduled" && !activeByCourt.has(match.court)) {
+  for (const match of scheduledMatches) {
+    if (!activeByCourt.has(match.court)) {
       activeByCourt.set(match.court, match.id);
     }
   }
   const activeMatchIds = new Set(activeByCourt.values());
   const activeCount = activeByCourt.size;
-  const queuedCount = orderedMatches.filter(
-    (match) => match.status === "scheduled" && !activeMatchIds.has(match.id),
-  ).length;
+  const queuedCount = scheduledMatches.filter((match) => !activeMatchIds.has(match.id)).length;
   const singleCourtBoard =
-    Boolean(activeRound) && new Set(orderedMatches.map((match) => match.court)).size === 1;
-  const queuesOnOneCourt = courts === 1 && courtCapacity > 1;
-
-  const onCourtIds = new Set(
-    roundMatches.flatMap((match) => [...match.team1, ...match.team2]).map((player) => player.playerId),
+    Boolean(activeRound) && new Set(roundMatches.map((match) => match.court)).size === 1;
+  const displayedMatches = singleCourtBoard ? scheduledMatches.slice(0, 2) : scheduledMatches;
+  const hasPendingCourt = scheduledMatches.length > 0;
+  const scheduledPlayerIds = new Set(
+    scheduledMatches
+      .flatMap((match) => [...match.team1, ...match.team2])
+      .map((player) => player.playerId),
   );
-  const waitingPlayers = players
-    .filter((player) => !onCourtIds.has(player.id))
-    .sort((a, b) => a.gamesPlayed - b.gamesPlayed || a.name.localeCompare(b.name));
+  const availablePool = players.filter((player) => !scheduledPlayerIds.has(player.id));
+  const minimumAvailableGames = minimumPositiveGames(availablePool);
+  const finishedPriority = new Map<string, number>();
+  if (!singleCourtBoard) {
+    const completedMatches = roundMatches
+      .filter((match) => match.status === "completed")
+      .sort((a, b) => {
+        const aCompleted = a.completedAt
+          ? new Date(a.completedAt).getTime()
+          : new Date(a.createdAt).getTime();
+        const bCompleted = b.completedAt
+          ? new Date(b.completedAt).getTime()
+          : new Date(b.createdAt).getTime();
+        return (
+          aCompleted - bCompleted ||
+          a.court - b.court ||
+          a.queuePosition - b.queuePosition
+        );
+      });
+    let rank = 0;
+    for (const match of completedMatches) {
+      for (const player of [...match.team1, ...match.team2]) {
+        if (!finishedPriority.has(player.playerId)) {
+          finishedPriority.set(player.playerId, rank);
+          rank += 1;
+        }
+      }
+    }
+  }
+
+  const availablePlayers = availablePool.sort((a, b) => {
+    if (!singleCourtBoard) {
+      const aRank = finishedPriority.get(a.id);
+      const bRank = finishedPriority.get(b.id);
+      if (aRank !== undefined || bRank !== undefined) {
+        const safeARank = aRank ?? Number.MAX_SAFE_INTEGER;
+        const safeBRank = bRank ?? Number.MAX_SAFE_INTEGER;
+        if (safeARank !== safeBRank) return safeARank - safeBRank;
+      }
+    }
+
+    const aGames = effectiveGamesPlayed(a.gamesPlayed, minimumAvailableGames);
+    const bGames = effectiveGamesPlayed(b.gamesPlayed, minimumAvailableGames);
+    if (aGames !== bGames) return aGames - bGames;
+
+    const aRest = playerRestTime(a);
+    const bRest = playerRestTime(b);
+    if (aRest !== bRest) return aRest - bRest;
+    return a.name.localeCompare(b.name);
+  });
+  const availableTier = LEVELS.map((level) => ({
+    ...level,
+    count: availablePlayers.filter((player) => player.level === level.key).length,
+  }))
+    .filter((tier) => tier.count >= 4)
+    .sort((a, b) => b.count - a.count)[0];
+  const usedCourtNumbers = new Set(roundMatches.map((match) => match.court));
+  const nextCourtNumber =
+    Array.from({ length: MAX_COURTS }, (_, index) => index + 1).find(
+      (court) => !usedCourtNumbers.has(court),
+    ) ?? null;
+  const canAddNextLineup =
+    Boolean(activeRound) &&
+    hasPendingCourt &&
+    availablePlayers.length >= 4 &&
+    (activeRound?.mode === "open" || Boolean(availableTier)) &&
+    (singleCourtBoard || nextCourtNumber !== null);
+  const addNextNote = !activeRound
+    ? ""
+    : !hasPendingCourt
+      ? "Save the current result, then build a new rotation."
+      : singleCourtBoard
+        ? availablePlayers.length < 4
+          ? `${4 - availablePlayers.length} more available player${
+              4 - availablePlayers.length === 1 ? "" : "s"
+            } needed for the next group.`
+          : activeRound.mode === "level" && !availableTier
+            ? "No available rating band has four players. Finish the current court, then shuffle a new Open Rate round."
+            : `Queues another Next Player group · ${availablePlayers.length} available.`
+        : nextCourtNumber === null
+          ? `Maximum of ${MAX_COURTS} courts reached. Shuffle a new round to continue.`
+          : availablePlayers.length < 4
+            ? `${4 - availablePlayers.length} more available player${
+                4 - availablePlayers.length === 1 ? "" : "s"
+              } needed for another court.`
+            : activeRound.mode === "level" && !availableTier
+              ? "No available rating band has four players. Finish the current court, then shuffle a new Open Rate round."
+              : `Adds ${courtName(nextCourtNumber, false)} · ${availablePlayers.length} available.`;
+
+  function handleLayoutChange(nextLayout: CourtLayout) {
+    setLayout(nextLayout);
+    setCourts((current) => {
+      if (nextLayout === "single") return 1;
+      return Math.min(Math.max(2, Math.min(current, maxCourts)), maxCourts);
+    });
+  }
 
   async function handleGenerate() {
     setBoardError("");
     setGenerating(true);
     try {
-      await onGenerate(courts, mode);
+      await onGenerate(layout, layout === "single" ? 1 : courts, mode);
     } catch (error) {
       setBoardError(error instanceof Error ? error.message : "Could not build a rotation.");
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handleAddNextLineup() {
+    setBoardError("");
+    setAddingNext(true);
+    try {
+      await onAddNextLineup();
+    } catch (error) {
+      setBoardError(
+        error instanceof Error ? error.message : "Could not add the next players.",
+      );
+    } finally {
+      setAddingNext(false);
     }
   }
 
@@ -342,139 +498,235 @@ export function MatchBoard({
     <section className="panel rotation-panel" id="rotation" aria-labelledby="rotation-title">
       <div className="rotation-head">
         <div>
-          <span className="eyebrow">Match night</span>
-          <h2 id="rotation-title">Tonight&apos;s rotation</h2>
+          <span className="eyebrow">{needsSetup ? "Pre-game setup" : "Live rotation"}</span>
+          <h2 id="rotation-title">{needsSetup ? "Set up the game" : "Current rotation"}</h2>
           <p>
-            {activeRound
-              ? completed === total
-                ? "Every lineup is in the books. Build the next fair rotation."
+            {needsSetup
+              ? roundComplete
+                ? "Round complete. Choose the format and courts for the next game."
+                : "Choose the match format, court layout, and number of courts before the first teams appear."
+              : singleCourtBoard
+                ? `Single court in play${
+                    queuedCount
+                      ? queuedCount === 1
+                        ? " · Next Player ready"
+                        : ` · Next Player + ${queuedCount - 1} more queued`
+                      : ""
+                  } · ${completed} of ${total} scored`
                 : `${activeCount} court${activeCount === 1 ? "" : "s"} in play${
                     queuedCount
                       ? ` · ${queuedCount} next lineup${queuedCount === 1 ? "" : "s"}`
                       : ""
-                  } · ${completed} of ${total} scored`
-              : mode === "level"
-                ? "Level-matched auto courts, with the fewest-played players first."
-                : "Open rate courts — any rating can share a court, fewest-played first."}
+                  } · ${completed} of ${total} scored`}
           </p>
         </div>
 
-        <div className="rotation-controls">
-          <div
-            className="court-stepper"
-            title={
-              mode === "level"
-                ? "Number of physical courts to fill with level-matched lineups"
-                : "Number of physical courts to fill with open-rate lineups"
-            }
-          >
-            <span className="stepper-label">Courts</span>
-            <button
-              type="button"
-              className="step-btn step-btn-small"
-              onClick={() => setCourts((value) => Math.max(1, value - 1))}
-              disabled={courts <= 1 || generating}
-              aria-label="Fewer courts"
-            >
-              <MinusIcon size={14} />
-            </button>
-            <strong>{Math.min(courts, courtCapacity)}</strong>
-            <button
-              type="button"
-              className="step-btn step-btn-small"
-              onClick={() => setCourts((value) => Math.min(maxCourts, value + 1))}
-              disabled={courts >= maxCourts || generating}
-              aria-label="More courts"
-            >
-              <PlusIcon size={14} />
-            </button>
+        {!needsSetup ? (
+          <div className="rotation-controls">
+            <span className="format-chip">
+              {mode === "open" ? <ShuffleIcon size={13} /> : <CheckIcon size={13} />}
+              {mode === "open" ? "Open Rate" : "Level match"}
+            </span>
+            <span className="format-chip">
+              <CourtIcon size={13} />
+              {singleCourtBoard
+                ? "Single court"
+                : `${activeCount} court${activeCount === 1 ? "" : "s"}`}
+            </span>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={handleGenerate}
-            disabled={!canAutoMatch || generating}
-            title={
-              canAutoMatch
-                ? mode === "level"
-                  ? "Build level-matched courts"
-                  : "Build Open rate courts across all levels"
-                : mode === "level"
-                  ? "Add four players in the same rating band, or switch to Open rate"
-                  : "Add at least four players to build an Open rate court"
-            }
-          >
-            {generating ? <span className="spinner" aria-hidden /> : <ShuffleIcon size={18} />}
-            {generating ? "Building…" : activeRound ? "Shuffle new round" : "Build rotation"}
-          </button>
-        </div>
+        ) : null}
       </div>
 
-      <div className="match-mode-row">
-        <div className="mode-tabs" role="tablist" aria-label="Matchmaking mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "level"}
-            className={`mode-tab ${mode === "level" ? "is-active" : ""}`}
-            onClick={() => setMode("level")}
-            disabled={generating}
-          >
-            <CheckIcon size={14} />
-            Level match
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === "open"}
-            className={`mode-tab ${mode === "open" ? "is-active" : ""}`}
-            onClick={() => setMode("open")}
-            disabled={generating}
-          >
-            <ShuffleIcon size={14} />
-            Open rate
-          </button>
-        </div>
-        <span className="mode-note">
-          {mode === "level"
-            ? "Rating bands stay separate"
-            : "Any rating can share a court"}
-          {activeRound ? " · applies to the next shuffle" : ""}
-        </span>
-      </div>
+      {needsSetup ? (
+        <>
+          <div className="setup-step-label">
+            <span>1</span>
+            Match format
+          </div>
+          <div className="match-mode-row">
+            <div className="mode-tabs" role="tablist" aria-label="Matchmaking mode">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "level"}
+                className={`mode-tab ${mode === "level" ? "is-active" : ""}`}
+                onClick={() => setMode("level")}
+                disabled={generating}
+              >
+                <CheckIcon size={14} />
+                Level match
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mode === "open"}
+                className={`mode-tab ${mode === "open" ? "is-active" : ""}`}
+                onClick={() => setMode("open")}
+                disabled={generating}
+              >
+                <ShuffleIcon size={14} />
+                Open Rate
+              </button>
+            </div>
+            <span className="mode-note">
+              {mode === "level"
+                ? "Rating bands stay separate"
+                : "Any rating can share a court"}
+            </span>
+          </div>
 
-      <div className={`auto-level-rule ${mode === "open" ? "is-open" : ""}`}>
-        <span className="auto-level-icon">
-          {mode === "open" ? <ShuffleIcon size={14} /> : <CheckIcon size={14} />}
-        </span>
-        <p>
-          {mode === "open" ? (
-            <>
-              <strong>Open rate is on.</strong> Automatic courts can mix Beginner, Low
-              Intermediate, and High Intermediate players.
-              <span> Fair play counts still decide who gets the next game.</span>
-            </>
-          ) : (
-            <>
-              <strong>Automatic courts are level-locked.</strong> Beginner plays beginner, low
-              intermediate plays low intermediate, and high intermediate plays high intermediate.
-              <span> Manual lineup changes are not rate-restricted.</span>
-            </>
-          )}
-        </p>
-      </div>
+          <div className="setup-step-label">
+            <span>2</span>
+            Court layout and count
+          </div>
+          <div className="match-mode-row layout-row">
+            <div className="mode-tabs" role="tablist" aria-label="Court layout">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={layout === "single"}
+                className={`mode-tab ${layout === "single" ? "is-active" : ""}`}
+                onClick={() => handleLayoutChange("single")}
+                disabled={generating}
+              >
+                <CourtIcon size={14} />
+                Single court
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={layout === "multiple"}
+                className={`mode-tab ${layout === "multiple" ? "is-active" : ""}`}
+                onClick={() => handleLayoutChange("multiple")}
+                disabled={generating}
+              >
+                <ShuffleIcon size={14} />
+                Multiple courts
+              </button>
+            </div>
+            {layout === "multiple" ? (
+              <div
+                className="court-stepper"
+                title={
+                  mode === "level"
+                    ? "Number of courts for the level-matched game"
+                    : "Number of courts for the Open Rate game"
+                }
+              >
+                <span className="stepper-label">Courts</span>
+                <button
+                  type="button"
+                  className="step-btn step-btn-small"
+                  onClick={() => setCourts((value) => Math.max(minCourts, value - 1))}
+                  disabled={courts <= minCourts || generating}
+                  aria-label="Fewer courts"
+                >
+                  <MinusIcon size={14} />
+                </button>
+                <strong>{Math.min(courts, courtCapacity)}</strong>
+                <button
+                  type="button"
+                  className="step-btn step-btn-small"
+                  onClick={() => setCourts((value) => Math.min(maxCourts, value + 1))}
+                  disabled={courts >= maxCourts || generating}
+                  aria-label="More courts"
+                >
+                  <PlusIcon size={14} />
+                </button>
+              </div>
+            ) : (
+              <span className="single-court-chip">
+                <CourtIcon size={14} />
+                {setupLineups >= 2 ? "1 Court + Next Player" : "1 Court"}
+              </span>
+            )}
+          </div>
+          <span className="mode-note setup-layout-note">
+            {layout === "single"
+              ? "Court + Next Player queue · the next group is locked until the current result is saved"
+              : "First finishers go first, then waiting players"}
+          </span>
 
-      {queuesOnOneCourt ? (
+          <div className={`auto-level-rule ${mode === "open" ? "is-open" : ""}`}>
+            <span className="auto-level-icon">
+              {mode === "open" ? <ShuffleIcon size={14} /> : <CheckIcon size={14} />}
+            </span>
+            <p>
+              {mode === "open" ? (
+                <>
+                  <strong>Open Rate is on.</strong> Automatic courts can mix Beginner, Low
+                  Intermediate, and High Intermediate players.
+                  <span>
+                    {layout === "multiple"
+                      ? " Multiple-court shuffle ranks first finishers, then waiting players."
+                      : " Fair play counts still decide who gets the next game."}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <strong>Automatic courts are level-locked.</strong> Beginner plays beginner, low
+                  intermediate plays low intermediate, and high intermediate plays high intermediate.
+                  <span>
+                    {layout === "multiple"
+                      ? " First finishers are ranked first within their level, then waiting players."
+                      : " Manual lineup changes are not rate-restricted."}
+                  </span>
+                </>
+              )}
+            </p>
+          </div>
+        </>
+      ) : null}
+
+      {activeRound && hasPendingCourt ? (
         <div className="queue-hint">
-          <ClockIcon size={14} />
+          <CourtIcon size={14} />
           <span>
-            One physical court selected — extra lineups are queued as{" "}
-            <strong>Next lineup</strong> cards on Court 01.
+            {singleCourtBoard ? (
+              <>
+                Court is the only table. Use <strong>Add next lineup</strong> to queue the{" "}
+                <strong>Next Player</strong> group. Saving the current result moves the next
+                group onto Court.
+              </>
+            ) : (
+              <>
+                Use <strong>Add next lineup</strong> to show another court, up to{" "}
+                <strong>{MAX_COURTS} courts</strong>. Shuffle unlocks after every active court
+                has a score.
+              </>
+            )}
           </span>
         </div>
       ) : null}
 
-      {activeRound && total > 0 ? (
+      {activeRound && hasPendingCourt ? (
+        <div className="queue-actions">
+          <div className="queue-action-copy">
+            <strong>{singleCourtBoard ? "Add next player" : "Add another court"}</strong>
+            <span>{addNextNote}</span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline btn-small"
+            onClick={() => void handleAddNextLineup()}
+            disabled={!canAddNextLineup || addingNext}
+            title={
+              canAddNextLineup
+                ? singleCourtBoard
+                  ? "Queue the Next Player group"
+                  : nextCourtNumber !== null
+                    ? `Add ${courtName(nextCourtNumber, false)} with a new lineup`
+                    : addNextNote
+                : addNextNote
+            }
+          >
+            {addingNext ? <span className="spinner" aria-hidden /> : <PlusIcon size={15} />}
+            {addingNext ? "Adding…" : "Add next lineup"}
+          </button>
+        </div>
+      ) : null}
+
+      {!needsSetup && activeRound && total > 0 ? (
         <div className="round-meter">
           <div className="round-meter-copy">
             <span>Round progress</span>
@@ -493,80 +745,91 @@ export function MatchBoard({
         </div>
       ) : null}
 
-      {!hasPlayers ? (
-        <div className="rotation-empty">
-          <div className="empty-court" aria-hidden>
-            <span className="empty-net" />
-            <span className="empty-ball" />
+      {needsSetup ? (
+        <div className="game-setup">
+          <div className="setup-summary">
+            <div className="setup-summary-item">
+              <span>Match format</span>
+              <strong>{mode === "open" ? "Open Rate" : "Level match"}</strong>
+            </div>
+            <div className="setup-summary-item">
+              <span>Court setup</span>
+              <strong>{setupCourtText}</strong>
+            </div>
+            <div className="setup-summary-item">
+              <span>Players</span>
+              <strong>
+                {setupPlayers} playing · {setupWaiting} waiting
+              </strong>
+            </div>
           </div>
-          <h3>{players.length === 0 ? "The court is open" : "A full court is needed"}</h3>
-          <p>
-            {players.length === 0
-              ? "Add players and their committee rating to start building balanced courts."
-              : `You have ${players.length} player${players.length === 1 ? "" : "s"}. Add ${4 - players.length} more to fill a court.`}
-          </p>
-          <button type="button" className="btn btn-dark" onClick={onAddPlayer}>
-            <PlusIcon size={17} />
-            Add a player
-          </button>
-        </div>
-      ) : !activeRound && !canAutoMatch ? (
-        <div className="rotation-empty needs-level">
-          <div className="empty-court" aria-hidden>
-            <span className="empty-net" />
-            <span className="empty-ball" />
+
+          {!canAutoMatch ? (
+            <div className="setup-warning" role="status">
+              <AlertIcon size={17} />
+              <span>
+                {players.length < 4
+                  ? `Add ${4 - players.length} more player${
+                      4 - players.length === 1 ? "" : "s"
+                    } to start.`
+                  : mode === "level"
+                    ? closestTier
+                      ? `No rating band has four players yet. Add ${closestTier.shortage} more ${
+                          closestTier.label
+                        } player${
+                          closestTier.shortage === 1 ? "" : "s"
+                        }, or switch to Open Rate.`
+                      : "No rating band has four players yet. Adjust a rating or switch to Open Rate."
+                    : "Add at least four players to start."}
+              </span>
+            </div>
+          ) : (
+            <p className="setup-ready-note">
+              <CheckIcon size={15} />
+              Setup ready. The teams and courts will appear only after you start.
+            </p>
+          )}
+
+          <div className="setup-actions">
+            <span className="setup-note">
+              {roundComplete
+                ? "The previous round is complete. Review the format and start the next game."
+                : "Review the format and court count, then start the first game."}
+            </span>
+            <div className="setup-buttons">
+              {players.length < 4 ? (
+                <button type="button" className="btn btn-outline" onClick={onAddPlayer}>
+                  <PlusIcon size={17} />
+                  Add a player
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-primary btn-large"
+                onClick={handleGenerate}
+                disabled={!canAutoMatch || generating}
+                title={
+                  !canAutoMatch
+                    ? mode === "level"
+                      ? "Add four players in the same rating band, or switch to Open Rate"
+                      : "Add at least four players to start"
+                    : "Generate the teams and reveal the court board"
+                }
+              >
+                {generating ? <span className="spinner" aria-hidden /> : <ShuffleIcon size={18} />}
+                {startButtonLabel}
+              </button>
+            </div>
           </div>
-          <h3>No full rating band yet</h3>
-          <p>
-            You have {players.length} players, but Level match needs four players in the same
-            rating band.
-            {closestTier
-              ? ` Add ${closestTier.shortage} more ${closestTier.label} player${
-                  closestTier.shortage === 1 ? "" : "s"
-                } to unlock a level-matched court, or switch to Open rate.`
-              : " Adjust a rating so four players share a level, or switch to Open rate."}
-          </p>
-          <div className="rotation-empty-actions">
-            <button type="button" className="btn btn-primary" onClick={() => setMode("open")}>
-              <ShuffleIcon size={17} />
-              Use Open rate
-            </button>
-            <button type="button" className="btn btn-outline" onClick={onAddPlayer}>
-              <PlusIcon size={17} />
-              Add a player
-            </button>
-          </div>
-        </div>
-      ) : !activeRound || total === 0 ? (
-        <div className="rotation-empty has-players">
-          <div className="empty-court" aria-hidden>
-            <span className="empty-net" />
-            <span className="empty-ball" />
-          </div>
-          <h3>{mode === "open" ? "Open rate courts, ready to build" : "Level-matched courts, ready to build"}</h3>
-          <p>
-            {players.length} players rated.{" "}
-            {mode === "open"
-              ? "Open rate can mix all rating bands, prioritizes anyone who hasn't played, and never repeats a name."
-              : "Each automatic court stays inside one rating band, prioritizes anyone who hasn't played, and never repeats a name."}
-          </p>
-          <button
-            type="button"
-            className="btn btn-dark"
-            onClick={handleGenerate}
-            disabled={generating || !canAutoMatch}
-          >
-            {generating ? <span className="spinner spinner-light" aria-hidden /> : <ShuffleIcon size={17} />}
-            {generating ? "Building rotation…" : "Build the first rotation"}
-          </button>
         </div>
       ) : (
-        <div className={`court-grid ${singleCourtBoard && orderedMatches.length > 1 ? "is-queue" : ""}`}>
-          {orderedMatches.map((match) => (
+        <div className="court-grid">
+          {displayedMatches.map((match) => (
             <CourtCard
               key={match.id}
               match={match}
-              queued={match.status === "scheduled" && !activeMatchIds.has(match.id)}
+              queued={!activeMatchIds.has(match.id)}
+              singleCourt={singleCourtBoard}
               saving={savingMatchId === match.id}
               onSaveScore={handleScore}
               onEditLineup={onEditLineup}
@@ -575,41 +838,48 @@ export function MatchBoard({
         </div>
       )}
 
-      {activeRound && total > 0 && waitingPlayers.length > 0 ? (
+      {!needsSetup && activeRound && total > 0 && availablePlayers.length > 0 ? (
         <div className="waiting-strip">
           <div className="waiting-label">
             <ClockIcon size={14} />
-            <span>Waiting list</span>
-            <strong>{waitingPlayers.length}</strong>
+            <span>Available next</span>
+            <strong>{availablePlayers.length}</strong>
           </div>
           <div className="waiting-players">
-            {waitingPlayers.slice(0, 8).map((player) => (
+            {availablePlayers.slice(0, 8).map((player) => (
               <span className="waiting-player" key={player.id}>
                 <Avatar name={player.name} size="xs" />
                 {player.name}
                 <small>{player.gamesPlayed} played</small>
               </span>
             ))}
-            {waitingPlayers.length > 8 ? (
-              <span className="waiting-more">+{waitingPlayers.length - 8} more</span>
+            {availablePlayers.length > 8 ? (
+              <span className="waiting-more">+{availablePlayers.length - 8} more</span>
             ) : null}
           </div>
           <span className="waiting-note">
-            Next rotation gives them priority
-            {activeRound?.mode === "open" ? " across all levels." : " within their level."}
+            {hasPendingCourt
+              ? singleCourtBoard
+                ? `Fewest games first for the next group${
+                    activeRound?.mode === "open"
+                      ? " across all levels."
+                      : " within their level."
+                  }`
+                : "Finished players are ranked first for the next shuffle; waiting players follow."
+              : "Available for the next rotation."}
           </span>
         </div>
       ) : null}
 
-      {activeRound && total > 0 ? (
+      {!needsSetup && activeRound && total > 0 ? (
         <div className="rotation-foot">
           <span>
-            <CheckIcon size={14} /> No duplicate players within a round
+            <CheckIcon size={14} /> No player on two active courts
           </span>
           <span>
             {activeRound.mode === "open" ? (
               <>
-                <ShuffleIcon size={14} /> Open rate mixes rating bands
+                <ShuffleIcon size={14} /> Open Rate mixes rating bands
               </>
             ) : (
               <>
@@ -617,15 +887,10 @@ export function MatchBoard({
               </>
             )}
           </span>
-          {queuedCount > 0 ? (
-            <span>
-              <ClockIcon size={14} /> Next lineups queue on Court 01
-            </span>
-          ) : (
-            <span>
-              <CheckIcon size={14} /> Fewest-played first
-            </span>
-          )}
+          <span>
+            <CourtIcon size={14} />{" "}
+            {singleCourtBoard ? "Court + Next Player queue" : `Up to ${MAX_COURTS} courts per round`}
+          </span>
         </div>
       ) : null}
     </section>

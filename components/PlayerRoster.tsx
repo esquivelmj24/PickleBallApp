@@ -233,10 +233,6 @@ export function PlayerRoster({
                         <div className="record-cell">
                           <span className="record-wins">{player.wins}W</span>
                           <span className="record-losses">{player.losses}L</span>
-                          <span className={`diff ${player.pointDiff > 0 ? "positive" : player.pointDiff < 0 ? "negative" : ""}`}>
-                            {player.pointDiff > 0 ? "+" : ""}
-                            {player.pointDiff}
-                          </span>
                         </div>
                       </td>
                       <td>

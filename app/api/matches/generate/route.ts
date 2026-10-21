@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { jsonError, readBody } from "@/lib/api";
+import { MAX_COURTS } from "@/lib/constants";
 import { getDb, type MatchDoc, type PlayerDoc } from "@/lib/db";
-import { buildRound, levelCourtCapacity } from "@/lib/matchmaking";
+import { buildRound, finishOrderPriority, levelCourtCapacity } from "@/lib/matchmaking";
 import { serializeMatch } from "@/lib/serializers";
-import type { MatchMode } from "@/lib/types";
+import type { CourtLayout, MatchMode } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -12,6 +13,7 @@ export async function POST(request: Request) {
   try {
     const body = await readBody(request);
     const db = await getDb();
+    const matchesCollection = db.collection<MatchDoc>("matches");
     const players = await db
       .collection<PlayerDoc>("players")
       .find({})
@@ -19,6 +21,14 @@ export async function POST(request: Request) {
 
     if (players.length < 4) {
       return jsonError("Add at least four players before building a rotation.");
+    }
+
+    const pending = await matchesCollection.countDocuments({ status: "scheduled" });
+    if (pending > 0) {
+      return jsonError(
+        "Enter the result for the current court before shuffling. The next players are already waiting.",
+        409,
+      );
     }
 
     const mode: MatchMode = body.mode === "open" ? "open" : "level";
@@ -42,13 +52,39 @@ export async function POST(request: Request) {
       return jsonError("Choose at least one court.");
     }
 
-    const courtCount = Math.min(requestedCourts, capacity);
+    const courtCount = Math.min(requestedCourts, capacity, MAX_COURTS);
+    const layout: CourtLayout =
+      body.layout === "multiple" || body.layout === "single"
+        ? body.layout
+        : courtCount === 1
+          ? "single"
+          : "multiple";
 
-    // A single physical court uses a queue: every available lineup is scheduled
-    // for Court 1 as "Next lineup" instead of inventing Court 2, Court 3, etc.
-    const usesQueue = courtCount === 1;
-    const lineupCount = usesQueue ? capacity : courtCount;
-    const round = buildRound(players, lineupCount, mode);
+    // Single Court uses a short queue: the active lineup is shown as Court and
+    // the next group as Next Player. Multiple Courts create one active lineup
+    // per physical court instead.
+    const usesQueue = layout === "single";
+    const lineupCount = usesQueue ? Math.min(capacity, 2) : courtCount;
+
+    // Multiple-court shuffle priority: players who finished their last game
+    // first, then players who were waiting. Single-court mode keeps the normal
+    // fair-play queue order.
+    let priorityOrder: Map<string, number> | null = null;
+    if (!usesQueue) {
+      const latestMatch = await matchesCollection
+        .find({})
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .next();
+      if (latestMatch) {
+        const previousMatches = await matchesCollection
+          .find({ roundId: latestMatch.roundId })
+          .toArray();
+        priorityOrder = finishOrderPriority(previousMatches, players);
+      }
+    }
+
+    const round = buildRound(players, lineupCount, mode, priorityOrder);
 
     if (round.pairings.length === 0) {
       return jsonError(
@@ -61,7 +97,7 @@ export async function POST(request: Request) {
 
     // Re-shuffling replaces the previous unplayed rotation. Completed matches
     // stay intact so player records and the leaderboard are never lost.
-    await db.collection("matches").deleteMany({ status: "scheduled" });
+    await matchesCollection.deleteMany({ status: "scheduled" });
 
     type NewMatchDoc = Omit<MatchDoc, "_id">;
     const docs: NewMatchDoc[] = round.pairings.map((pairing, index) => ({
@@ -97,6 +133,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       roundId: round.roundId,
       mode,
+      layout,
       courts: courtCount,
       queued: usesQueue ? Math.max(0, docs.length - 1) : 0,
       matches: saved.map(serializeMatch),
