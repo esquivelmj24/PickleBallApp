@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError, readBody } from "@/lib/api";
+import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { getDb, getMongoClient, type PlayerDoc } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,10 @@ const CONFIRMATION = "RESET";
  */
 export async function DELETE(request: Request) {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const body = await readBody(request);
     if (body.confirm !== CONFIRMATION) {
       return jsonError(`Type ${CONFIRMATION} to confirm resetting the game.`, 400);
@@ -30,9 +35,9 @@ export async function DELETE(request: Request) {
       await session.withTransaction(async () => {
         const matches = await db
           .collection("matches")
-          .deleteMany({}, { session });
+          .deleteMany({ ownerId }, { session });
         const players = await db.collection<PlayerDoc>("players").updateMany(
-          {},
+          { ownerId },
           {
             $set: {
               gamesPlayed: 0,

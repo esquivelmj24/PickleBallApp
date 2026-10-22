@@ -1,4 +1,4 @@
-import type { Db } from "mongodb";
+import type { Db, ObjectId } from "mongodb";
 import { MAX_COURTS } from "./constants";
 import { type MatchDoc, type PlayerDoc } from "./db";
 import { buildRound, finishOrderPriority, levelCourtCapacity } from "./matchmaking";
@@ -20,30 +20,40 @@ export type AdvanceRoundResult = {
   waiting?: number;
 };
 
-// The app runs one committee desk at a time. Serializing this helper prevents
-// two nearly simultaneous score saves from creating two next rounds.
-let advanceInFlight: Promise<AdvanceRoundResult> | null = null;
+// Serialize auto-advance per admin so two nearly simultaneous score saves for
+// the same owner cannot create two next rounds. Different admins advance
+// independently.
+const advanceInFlight = new Map<string, Promise<AdvanceRoundResult>>();
 
-export function advanceRoundIfComplete(db: Db): Promise<AdvanceRoundResult> {
-  if (!advanceInFlight) {
-    advanceInFlight = advanceRoundIfCompleteUnlocked(db).finally(() => {
-      advanceInFlight = null;
-    });
-  }
-  return advanceInFlight;
+export function advanceRoundIfComplete(
+  db: Db,
+  ownerId: ObjectId,
+): Promise<AdvanceRoundResult> {
+  const key = ownerId.toString();
+  const existing = advanceInFlight.get(key);
+  if (existing) return existing;
+
+  const pending = advanceRoundIfCompleteUnlocked(db, ownerId).finally(() => {
+    advanceInFlight.delete(key);
+  });
+  advanceInFlight.set(key, pending);
+  return pending;
 }
 
-async function advanceRoundIfCompleteUnlocked(db: Db): Promise<AdvanceRoundResult> {
+async function advanceRoundIfCompleteUnlocked(
+  db: Db,
+  ownerId: ObjectId,
+): Promise<AdvanceRoundResult> {
   const matches = db.collection<MatchDoc>("matches");
   const latestMatch = await matches
-    .find({})
+    .find({ ownerId })
     .sort({ createdAt: -1, _id: -1 })
     .limit(1)
     .next();
 
   if (!latestMatch) return { advanced: false, reason: "no-matches" };
 
-  const roundMatches = await matches.find({ roundId: latestMatch.roundId }).toArray();
+  const roundMatches = await matches.find({ ownerId, roundId: latestMatch.roundId }).toArray();
   if (roundMatches.length === 0) return { advanced: false, reason: "no-matches" };
 
   // A round is only advanced when every court and queued group has a result.
@@ -51,7 +61,7 @@ async function advanceRoundIfCompleteUnlocked(db: Db): Promise<AdvanceRoundResul
     return { advanced: false, reason: "in-progress" };
   }
 
-  const players = await db.collection<PlayerDoc>("players").find({}).toArray();
+  const players = await db.collection<PlayerDoc>("players").find({ ownerId }).toArray();
   if (players.length < 4) {
     return { advanced: false, reason: "not-enough-players" };
   }
@@ -79,6 +89,7 @@ async function advanceRoundIfCompleteUnlocked(db: Db): Promise<AdvanceRoundResul
   const now = new Date();
   type NewMatchDoc = Omit<MatchDoc, "_id">;
   const docs: NewMatchDoc[] = round.pairings.map((pairing, index) => ({
+    ownerId,
     roundId: round.roundId,
     court: layout === "single" ? 1 : pairing.court,
     mode,

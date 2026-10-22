@@ -9,6 +9,7 @@ import { MatchBoard } from "./MatchBoard";
 import { PlayerModal } from "./PlayerModal";
 import { PlayerRoster } from "./PlayerRoster";
 import { LevelGuide, RecentResults, TopFive } from "./SidePanels";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
   AlertIcon,
   ArrowUpRightIcon,
@@ -39,7 +40,7 @@ async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   return payload;
 }
 
-export function Dashboard() {
+export function Dashboard({ alias }: { alias: string }) {
   const [state, setState] = useState<AppState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -129,6 +130,14 @@ export function Dashboard() {
         result.matches
       } match${result.matches === 1 ? "" : "es"} removed.`,
     );
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.href = "/login";
+    }
   }
 
   async function handleGenerate(layout: CourtLayout, courts: number, mode: MatchMode) {
@@ -296,6 +305,14 @@ export function Dashboard() {
             <span />
             Court desk live
           </span>
+          <ThemeSwitcher compact />
+          <span className="admin-chip" title="Signed in as admin">
+            <span className="admin-dot" />
+            {alias}
+          </span>
+          <button type="button" className="btn btn-ghost btn-small" onClick={() => void handleLogout()}>
+            Log out
+          </button>
         </div>
       </header>
 

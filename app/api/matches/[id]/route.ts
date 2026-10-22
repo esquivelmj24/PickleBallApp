@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
 import { jsonError, readBody } from "@/lib/api";
+import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { getDb, type MatchDoc, type MatchPlayerDoc, type PlayerDoc } from "@/lib/db";
 import { serializeMatch } from "@/lib/serializers";
 
@@ -17,6 +18,10 @@ function parseLineup(value: unknown): string[] | null {
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const { id } = await context.params;
     if (!ObjectId.isValid(id)) return jsonError("Invalid match id.");
 
@@ -35,13 +40,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     const matchId = new ObjectId(id);
     const db = await getDb();
     const matches = db.collection<MatchDoc>("matches");
-    const match = await matches.findOne({ _id: matchId });
+    const match = await matches.findOne({ _id: matchId, ownerId });
     if (!match) return jsonError("Match not found.", 404);
     if (match.status !== "scheduled") {
       return jsonError("Completed matches cannot be edited. Update the score instead.", 409);
     }
 
     const queuedAhead = await matches.findOne({
+      ownerId,
       roundId: match.roundId,
       court: match.court,
       status: "scheduled",
@@ -57,7 +63,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const playerIds = allIds.map((playerId) => new ObjectId(playerId));
     const players = await db
       .collection<PlayerDoc>("players")
-      .find({ _id: { $in: playerIds } })
+      .find({ _id: { $in: playerIds }, ownerId })
       .toArray();
 
     if (players.length !== 4) {
@@ -65,6 +71,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     }
 
     const conflict = await matches.findOne({
+      ownerId,
       _id: { $ne: matchId },
       status: "scheduled",
       $or: [
@@ -87,7 +94,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     };
 
     const updated = await matches.findOneAndUpdate(
-      { _id: matchId },
+      { _id: matchId, ownerId },
       {
         $set: {
           team1: team1Ids.map(toSnapshot),

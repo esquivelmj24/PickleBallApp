@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError } from "@/lib/api";
+import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { MAX_COURTS } from "@/lib/constants";
 import { getDb, type MatchDoc, type PlayerDoc } from "@/lib/db";
 import { buildRound, finishOrderPriority } from "@/lib/matchmaking";
@@ -11,15 +12,23 @@ export const runtime = "nodejs";
 
 export async function POST() {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const db = await getDb();
     const matches = db.collection<MatchDoc>("matches");
-    const latestMatch = await matches.find({}).sort({ createdAt: -1 }).limit(1).next();
+    const latestMatch = await matches
+      .find({ ownerId })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .next();
 
     if (!latestMatch) {
       return jsonError("Build a rotation first before adding the next players.", 404);
     }
 
-    const roundMatches = await matches.find({ roundId: latestMatch.roundId }).toArray();
+    const roundMatches = await matches.find({ ownerId, roundId: latestMatch.roundId }).toArray();
     const uniqueCourts = new Set(roundMatches.map((match) => match.court));
     const singleCourtRound = uniqueCourts.size === 1;
 
@@ -58,7 +67,7 @@ export async function POST() {
         .map((player) => player.playerId.toString()),
     );
 
-    const players = await db.collection<PlayerDoc>("players").find({}).toArray();
+    const players = await db.collection<PlayerDoc>("players").find({ ownerId }).toArray();
     const available = players.filter((player) => !lockedPlayerIds.has(player._id.toString()));
 
     if (available.length < 4) {
@@ -90,6 +99,7 @@ export async function POST() {
 
     type NewMatchDoc = Omit<MatchDoc, "_id">;
     const doc: NewMatchDoc = {
+      ownerId,
       roundId: latestMatch.roundId,
       court: targetCourt,
       mode,

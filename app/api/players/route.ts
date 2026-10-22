@@ -1,6 +1,7 @@
 import { MongoServerError } from "mongodb";
 import { NextResponse } from "next/server";
 import { cleanName, jsonError, nameKey, readBody } from "@/lib/api";
+import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { getDb, type PlayerDoc } from "@/lib/db";
 import { normalizeRating } from "@/lib/levels";
 import { serializePlayer } from "@/lib/serializers";
@@ -10,8 +11,16 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const db = await getDb();
-    const docs = await db.collection<PlayerDoc>("players").find({}).sort({ name: 1 }).toArray();
+    const docs = await db
+      .collection<PlayerDoc>("players")
+      .find({ ownerId })
+      .sort({ name: 1 })
+      .toArray();
     return NextResponse.json(docs.map(serializePlayer));
   } catch (error) {
     console.error("GET /api/players failed", error);
@@ -21,6 +30,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const body = await readBody(request);
     const name = cleanName(body.name);
     const rating = normalizeRating(body.rating);
@@ -35,6 +48,7 @@ export async function POST(request: Request) {
     const db = await getDb();
     const now = new Date();
     const doc = {
+      ownerId,
       name,
       nameKey: nameKey(name),
       rating,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,12 @@ const DEMO_PLAYERS = [
 
 export async function POST() {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const db = await getDb();
-    const existing = await db.collection("players").countDocuments();
+    const existing = await db.collection("players").countDocuments({ ownerId });
     if (existing > 0) {
       return NextResponse.json(
         { error: "The roster already has players. Sample data is only added to an empty board." },
@@ -32,6 +37,7 @@ export async function POST() {
 
     const now = new Date();
     const docs = DEMO_PLAYERS.map((player) => ({
+      ownerId,
       ...player,
       nameKey: player.name.toLowerCase(),
       gamesPlayed: 0,

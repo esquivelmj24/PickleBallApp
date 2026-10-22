@@ -1,5 +1,11 @@
+import { redirect } from "next/navigation";
 import { Dashboard } from "@/components/Dashboard";
+import { getSessionUser } from "@/lib/auth";
 
-export default function Home() {
-  return <Dashboard />;
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const user = await getSessionUser();
+  if (!user) redirect("/login");
+  return <Dashboard alias={user.alias} />;
 }

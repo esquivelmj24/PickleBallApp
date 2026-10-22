@@ -15,8 +15,14 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="classic" suppressHydrationWarning>
       <body>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              '(function(){try{var t=localStorage.getItem("pickle-theme");if(["classic","dark","gray","yellow"].indexOf(t)>-1){document.documentElement.dataset.theme=t;}}catch(e){}})();',
+          }}
+        />
         <div className="site-backdrop" aria-hidden>
           <span className="site-backdrop-image" />
           <span className="site-backdrop-wash" />

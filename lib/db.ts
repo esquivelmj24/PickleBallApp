@@ -32,15 +32,28 @@ export async function getDb(): Promise<Db> {
 
   if (!globalForMongo.mongoIndexesPromise) {
     globalForMongo.mongoIndexesPromise = (async () => {
+      // Before per-admin isolation, player names were globally unique. Names
+      // are now unique per admin, so remove the old index before creating the
+      // owner-scoped one. Missing indexes are safe to ignore.
+      await db.collection("players").dropIndex("nameKey_1").catch(() => undefined);
+
       await Promise.all([
-        db.collection("players").createIndex({ nameKey: 1 }, { unique: true }),
-        db.collection("players").createIndex({ name: 1 }),
-        db.collection("matches").createIndex({ createdAt: -1 }),
-        db.collection("matches").createIndex({ status: 1, createdAt: -1 }),
-        db.collection("matches").createIndex({ roundId: 1 }),
-        db.collection("matches").createIndex({ "team1.playerId": 1 }),
-        db.collection("matches").createIndex({ "team2.playerId": 1 }),
+        db.collection("players").createIndex({ ownerId: 1, nameKey: 1 }, { unique: true }),
+        db.collection("players").createIndex({ ownerId: 1, name: 1 }),
+        db.collection("users").createIndex({ aliasKey: 1 }, { unique: true }),
+        db.collection("matches").createIndex({ ownerId: 1, createdAt: -1 }),
+        db.collection("matches").createIndex({ ownerId: 1, status: 1, createdAt: -1 }),
+        db.collection("matches").createIndex({ ownerId: 1, roundId: 1 }),
+        db.collection("matches").createIndex({ ownerId: 1, "team1.playerId": 1 }),
+        db.collection("matches").createIndex({ ownerId: 1, "team2.playerId": 1 }),
       ]);
+
+      // Boards created before per-admin isolation have no ownerId. Assign that
+      // legacy data to the earliest admin so it is not stranded. New admins
+      // never inherit another admin's games.
+      await claimLegacyData(db).catch((error) => {
+        console.error("Legacy data migration failed", error);
+      });
     })().catch((error) => {
       globalForMongo.mongoIndexesPromise = undefined;
       throw error;
@@ -51,8 +64,19 @@ export async function getDb(): Promise<Db> {
   return db;
 }
 
+export type UserDoc = {
+  _id: ObjectId;
+  alias: string;
+  aliasKey: string;
+  passwordHash: string;
+  role: "admin";
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 export type PlayerDoc = {
   _id: ObjectId;
+  ownerId: ObjectId;
   name: string;
   nameKey: string;
   rating: number;
@@ -74,6 +98,7 @@ export type MatchPlayerDoc = {
 
 export type MatchDoc = {
   _id: ObjectId;
+  ownerId: ObjectId;
   roundId: string;
   court: number;
   mode?: "level" | "open";
@@ -88,3 +113,30 @@ export type MatchDoc = {
   completedAt: Date | null;
   updatedAt: Date;
 };
+
+/**
+ * Claims players and matches created before owner scoping was introduced.
+ * The earliest admin account gets the old shared board; all later admins start
+ * with their own empty board.
+ */
+export async function claimLegacyData(db: Db): Promise<void> {
+  const firstAdmin = await db
+    .collection<UserDoc>("users")
+    .find({ role: "admin" })
+    .sort({ createdAt: 1, _id: 1 })
+    .limit(1)
+    .next();
+
+  if (!firstAdmin) return;
+
+  await Promise.all([
+    db.collection("players").updateMany(
+      { ownerId: null },
+      { $set: { ownerId: firstAdmin._id } },
+    ),
+    db.collection("matches").updateMany(
+      { ownerId: null },
+      { $set: { ownerId: firstAdmin._id } },
+    ),
+  ]);
+}

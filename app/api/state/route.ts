@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { getDb, type MatchDoc, type PlayerDoc } from "@/lib/db";
 import { advanceRoundIfComplete } from "@/lib/rounds";
 import { levelCounts, rankPlayers, serializeMatch, serializePlayer } from "@/lib/serializers";
@@ -9,12 +10,16 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const db = await getDb();
 
-    // If the previous round is fully scored, build the next queue before
-    // returning the board. The session continues until the admin resets it.
+    // Only the owner's visit may advance their queue. Other admins can never
+    // see or change this session.
     try {
-      await advanceRoundIfComplete(db);
+      await advanceRoundIfComplete(db, ownerId);
     } catch (error) {
       console.error("GET /api/state auto-advance failed", error);
     }
@@ -23,26 +28,30 @@ export async function GET() {
     const matchesCollection = db.collection<MatchDoc>("matches");
 
     const [playerDocs, latestMatch, completedCount] = await Promise.all([
-      playersCollection.find({}).sort({ name: 1 }).toArray(),
-      matchesCollection.find({}).sort({ createdAt: -1 }).limit(1).next(),
-      matchesCollection.countDocuments({ status: "completed" }),
+      playersCollection.find({ ownerId }).sort({ name: 1 }).toArray(),
+      matchesCollection
+        .find({ ownerId })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .next(),
+      matchesCollection.countDocuments({ ownerId, status: "completed" }),
     ]);
 
     const activeRoundMatches = latestMatch
       ? await matchesCollection
-          .find({ roundId: latestMatch.roundId })
+          .find({ ownerId, roundId: latestMatch.roundId })
           .sort({ court: 1, queuePosition: 1, createdAt: 1 })
           .toArray()
       : [];
 
     const recentDocs = latestMatch
       ? await matchesCollection
-          .find({ status: "completed", roundId: { $ne: latestMatch.roundId } })
+          .find({ ownerId, status: "completed", roundId: { $ne: latestMatch.roundId } })
           .sort({ completedAt: -1 })
           .limit(8)
           .toArray()
       : await matchesCollection
-          .find({ status: "completed" })
+          .find({ ownerId, status: "completed" })
           .sort({ completedAt: -1 })
           .limit(8)
           .toArray();

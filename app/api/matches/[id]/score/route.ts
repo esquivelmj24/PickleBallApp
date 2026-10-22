@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
 import { isValidScore, jsonError, readBody } from "@/lib/api";
+import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { getDb, getMongoClient, type MatchDoc, type MatchPlayerDoc, type PlayerDoc } from "@/lib/db";
 import { advanceRoundIfComplete } from "@/lib/rounds";
 import { serializeMatch } from "@/lib/serializers";
@@ -22,6 +23,7 @@ function scoreIncrements(
   multiplier: 1 | -1,
   touchLastPlayed: boolean,
   now: Date,
+  ownerId: ObjectId,
 ) {
   const team1Won = snapshot.team1Score > snapshot.team2Score;
 
@@ -35,7 +37,7 @@ function scoreIncrements(
 
     return {
       updateOne: {
-        filter: { _id: player.playerId },
+        filter: { _id: player.playerId, ownerId },
         update: {
           $inc: {
             gamesPlayed: multiplier,
@@ -53,6 +55,10 @@ function scoreIncrements(
 
 export async function POST(request: Request, context: RouteContext) {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const { id } = await context.params;
     if (!ObjectId.isValid(id)) return jsonError("Invalid match id.");
 
@@ -76,12 +82,13 @@ export async function POST(request: Request, context: RouteContext) {
       await session.withTransaction(async () => {
         const matches = db.collection<MatchDoc>("matches");
         const players = db.collection<PlayerDoc>("players");
-        const match = await matches.findOne({ _id: matchId }, { session });
+        const match = await matches.findOne({ _id: matchId, ownerId }, { session });
         if (!match) throw new Error("NOT_FOUND");
 
         if (match.status === "scheduled") {
           const earlierScheduled = await matches.findOne(
             {
+              ownerId,
               roundId: match.roundId,
               court: match.court,
               status: "scheduled",
@@ -106,6 +113,7 @@ export async function POST(request: Request, context: RouteContext) {
               -1,
               false,
               now,
+              ownerId,
             ),
             { session },
           );
@@ -117,12 +125,13 @@ export async function POST(request: Request, context: RouteContext) {
             1,
             true,
             now,
+            ownerId,
           ),
           { session },
         );
 
         updatedMatch = await matches.findOneAndUpdate(
-          { _id: matchId },
+          { _id: matchId, ownerId },
           {
             $set: {
               status: "completed",
@@ -145,7 +154,7 @@ export async function POST(request: Request, context: RouteContext) {
     // Once the last court is scored, the next queue is built automatically.
     // The score is already committed, so an advance failure must not fail it.
     try {
-      await advanceRoundIfComplete(db);
+      await advanceRoundIfComplete(db, ownerId);
     } catch (error) {
       console.error("POST /api/matches/[id]/score auto-advance failed", error);
     }

@@ -6,6 +6,8 @@ Built with **Next.js 15 (App Router)**, **TypeScript**, and **MongoDB**.
 
 ## Features
 
+- **Admin accounts with private game boards** — register with an alias, password, and the mandatory **Admin user** confirmation. Passwords are hashed with scrypt, and signed HTTP-only session cookies keep admins signed in for seven days. Every player, match, and reset is scoped to the signed-in admin, so each admin sees and manages only their own games.
+- **Background themes** — choose **Classic**, **Dark**, **Gray**, or **Black & Yellow** from the theme selector. The choice is saved in the browser and applied on the login and dashboard screens.
 - **Committee-assigned ratings** — enter a player's name and set a rating from 2.0 to 4.0 with a slider, stepper, or exact number input.
 - **Rating bands** — the level is calculated automatically:
   - Beginner: 2.0 – 2.5
@@ -44,7 +46,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000). On first run, open [http://localhost:3000/register](http://localhost:3000/register) and create an admin account. The dashboard is at `/` and requires that session. Each admin account has its own private board.
 
 ### Environment variables
 
@@ -52,10 +54,11 @@ Open [http://localhost:3000](http://localhost:3000).
 | --- | --- | --- |
 | `MONGODB_URI` | Yes | MongoDB Atlas / MongoDB connection string |
 | `MONGODB_DB` | No | Database name. Defaults to `dinkboard` |
+| `AUTH_SECRET` | Recommended | Long random value used to sign admin session cookies. If omitted, the app falls back to `MONGODB_URI` |
 | `MONGODB_USERNAME` | No | Kept for local credential reference |
 | `MONGODB_PASSWORD` | No | Kept for local credential reference |
 
-Credentials belong in `.env.local`, which is ignored by Git. Never commit database secrets.
+Credentials belong in `.env.local`, which is ignored by Git. Never commit database secrets. Set a separate `AUTH_SECRET` in production so sessions remain valid independently of database credentials.
 
 > The default database name remains `dinkboard` so existing deployments keep their saved players and matches. Only the visible app branding changed to **Pickle & Chill**.
 
@@ -63,10 +66,11 @@ Credentials belong in `.env.local`, which is ignored by Git. Never commit databa
 
 The app creates these collections automatically:
 
-- `players` — name, rating, play counts, record, point totals
-- `matches` — round id, court number, matchmaking mode, queue position, team snapshots, scores, status
+- `players` — `ownerId` (admin account), name, rating, play counts, record, point totals
+- `matches` — `ownerId` (admin account), round id, court number, matchmaking mode, queue position, team snapshots, scores, status
+- `users` — admin alias, normalized alias key, scrypt password hash, role, and timestamps
 
-Indexes for player uniqueness and match lookups are created on first connection.
+Player names are unique per admin, not across the whole database. Indexes for owner-scoped player names, admin alias uniqueness, and owner-scoped match lookups are created on first connection.
 
 To try the interface with a sample roster, use **Load sample roster** in the empty roster panel. It is only available while the roster is empty.
 
@@ -163,18 +167,46 @@ The Top 5 updates after each saved result:
 
 Until the first result is entered, the top five are ordered by committee rating.
 
+## Authentication and admin isolation
+
+### Admin registration and login
+
+- Registration requires **Alias**, **Password**, and the **Admin user** checkbox. Alias and password are both mandatory.
+- Aliases are case-insensitive and must be 3–30 characters. Passwords must be 8–128 characters.
+- Successful registration signs the admin in and redirects to the dashboard.
+- Login rejects unknown aliases and wrong passwords with the same message: **“Invalid alias or password. Please try again.”**
+- Sessions are stored in a signed, HTTP-only `pc_session` cookie for seven days. **Log out** clears it.
+- Every non-auth API route checks the admin session and returns `401` with “Admin access required. Sign in with an admin account.” when it is missing or invalid.
+
+> Registration is open: anyone who completes `/register` becomes an admin. Before exposing the app publicly, restrict access to `/register` (for example with a deployment-level password or invite code) if the admin group should be limited.
+
+### Per-admin game isolation
+
+- Each player and match stores the `_id` of the admin account that created it.
+- Every API query — roster, live state, lineups, scores, reset, clear, and sample data — filters by the signed-in admin's id.
+- Auto-advancing the queue is also scoped per admin, so two admins can run games at the same time without interfering.
+- Admins cannot view, score, edit, reset, or delete another admin's games. Using another admin's player or match id returns “not found.”
+- The previous public guest board and login QR code have been removed. The app is admin-only.
+- Players and matches created before owner scoping are assigned to the earliest admin account on the next server start or sign-in. Later admins always start with an empty board.
+
 ## API overview
 
 | Route | Purpose |
 | --- | --- |
-| `GET /api/state` | Dashboard state: players, active round, recent results, Top 5; also builds the next rotation automatically when the previous round is complete |
-| `POST /api/players` | Add a rated player |
-| `PATCH /api/players/:id` | Update a player's name or rating |
-| `DELETE /api/players/:id` | Remove a player not assigned to an active court |
-| `POST /api/matches/generate` | Build the first rotation with `layout: "single" \| "multiple"`, `mode: "level"` or `mode: "open"`, and a court count; rejected while a session is already active |
-| `POST /api/matches/next` | Append the Next Player group on a single-court round, or another physical court up to 6; queued groups stay locked until the active result is saved |
-| `PATCH /api/matches/:id` | Manually change an active scheduled lineup; returns `409` for a queued Next Player group |
-| `POST /api/matches/:id/score` | Save or correct a result; automatically builds the next rotation when the last court is scored |
-| `DELETE /api/reset/session` | Reset the game session: clear matches and session W/L totals, keep the roster and ratings (requires `confirm: "RESET"`) |
-| `DELETE /api/reset` | Clear all players and match history (requires `confirm: "CLEAR ALL"`) |
-| `POST /api/demo` | Add a sample roster when the roster is empty |
+| `POST /api/auth/register` | Create an admin account with `alias`, `password`, and `admin: true`; signs the admin in |
+| `POST /api/auth/login` | Sign in with `alias` and `password`; returns `401` for invalid credentials |
+| `POST /api/auth/logout` | Clear the admin session cookie |
+| `GET /api/state` | Admin only. The signed-in admin's board state: players, active round, recent results, Top 5; also builds their next rotation automatically when the previous round is complete |
+| `GET /api/players` | Admin only. The signed-in admin's roster |
+| `POST /api/players` | Admin only. Add a rated player to the signed-in admin's roster |
+| `PATCH /api/players/:id` | Admin only. Update one of the admin's players |
+| `DELETE /api/players/:id` | Admin only. Remove one of the admin's players when not on an active court |
+| `POST /api/matches/generate` | Admin only. Build the first rotation with `layout: "single" \| "multiple"`, `mode: "level"` or `mode: "open"`, and a court count; rejected while a session is already active |
+| `POST /api/matches/next` | Admin only. Append the Next Player group on a single-court round, or another physical court up to 6; queued groups stay locked until the active result is saved |
+| `PATCH /api/matches/:id` | Admin only. Manually change an active scheduled lineup; returns `409` for a queued Next Player group |
+| `POST /api/matches/:id/score` | Admin only. Save or correct a result; automatically builds the next rotation when the last court is scored |
+| `DELETE /api/reset/session` | Admin only. Reset the game session: clear matches and session W/L totals, keep the roster and ratings (requires `confirm: "RESET"`) |
+| `DELETE /api/reset` | Admin only. Clear all of the admin's players and match history (requires `confirm: "CLEAR ALL"`) |
+| `POST /api/demo` | Admin only. Add a sample roster when the admin's roster is empty |
+
+All owner-scoped routes operate only on the signed-in admin's `ownerId`; another admin's ids are treated as not found.

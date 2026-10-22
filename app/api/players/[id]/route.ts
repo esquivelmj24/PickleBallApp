@@ -1,6 +1,7 @@
 import { MongoServerError, ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
 import { cleanName, jsonError, nameKey, readBody } from "@/lib/api";
+import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { getDb, type PlayerDoc } from "@/lib/db";
 import { normalizeRating } from "@/lib/levels";
 import { serializePlayer } from "@/lib/serializers";
@@ -12,13 +13,19 @@ type RouteContext = { params: Promise<{ id: string }> };
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const { id } = await context.params;
     if (!ObjectId.isValid(id)) return jsonError("Invalid player id.", 400);
 
     const playerId = new ObjectId(id);
     const body = await readBody(request);
     const db = await getDb();
-    const existing = await db.collection<PlayerDoc>("players").findOne({ _id: playerId });
+    const existing = await db
+      .collection<PlayerDoc>("players")
+      .findOne({ _id: playerId, ownerId });
     if (!existing) return jsonError("Player not found.", 404);
 
     const name = body.name === undefined ? existing.name : cleanName(body.name);
@@ -36,7 +43,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       updatedAt: now,
     };
 
-    await db.collection("players").updateOne({ _id: playerId }, { $set: update });
+    await db.collection("players").updateOne({ _id: playerId, ownerId }, { $set: update });
 
     const matches = db.collection("matches");
     const snapshotUpdate = {
@@ -52,12 +59,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 
     await Promise.all([
       matches.updateMany(
-        { status: "scheduled", "team1.playerId": playerId },
+        { ownerId, status: "scheduled", "team1.playerId": playerId },
         snapshotUpdate,
         { arrayFilters },
       ),
       matches.updateMany(
-        { status: "scheduled", "team2.playerId": playerId },
+        { ownerId, status: "scheduled", "team2.playerId": playerId },
         snapshotUpdate,
         { arrayFilters },
       ),
@@ -83,12 +90,17 @@ export async function PATCH(request: Request, context: RouteContext) {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const { id } = await context.params;
     if (!ObjectId.isValid(id)) return jsonError("Invalid player id.", 400);
 
     const playerId = new ObjectId(id);
     const db = await getDb();
     const scheduledMatch = await db.collection("matches").findOne({
+      ownerId,
       status: "scheduled",
       $or: [{ "team1.playerId": playerId }, { "team2.playerId": playerId }],
     });
@@ -100,7 +112,7 @@ export async function DELETE(_request: Request, context: RouteContext) {
       );
     }
 
-    const result = await db.collection("players").deleteOne({ _id: playerId });
+    const result = await db.collection("players").deleteOne({ _id: playerId, ownerId });
     if (!result.deletedCount) return jsonError("Player not found.", 404);
 
     return NextResponse.json({ ok: true });

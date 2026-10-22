@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { jsonError, readBody } from "@/lib/api";
+import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { MAX_COURTS } from "@/lib/constants";
 import { getDb, type MatchDoc, type PlayerDoc } from "@/lib/db";
 import { buildRound, finishOrderPriority, levelCourtCapacity } from "@/lib/matchmaking";
@@ -11,19 +12,23 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
+    const admin = await requireAdmin();
+    if (!admin) return unauthorizedResponse();
+    const ownerId = ownerObjectId(admin);
+
     const body = await readBody(request);
     const db = await getDb();
     const matchesCollection = db.collection<MatchDoc>("matches");
     const players = await db
       .collection<PlayerDoc>("players")
-      .find({})
+      .find({ ownerId })
       .toArray();
 
     if (players.length < 4) {
       return jsonError("Add at least four players before building a rotation.");
     }
 
-    const pending = await matchesCollection.countDocuments({ status: "scheduled" });
+    const pending = await matchesCollection.countDocuments({ ownerId, status: "scheduled" });
     if (pending > 0) {
       return jsonError(
         "Enter the result for the current court before shuffling. The next players are already waiting.",
@@ -72,13 +77,13 @@ export async function POST(request: Request) {
     let priorityOrder: Map<string, number> | null = null;
     if (!usesQueue) {
       const latestMatch = await matchesCollection
-        .find({})
+        .find({ ownerId })
         .sort({ createdAt: -1 })
         .limit(1)
         .next();
       if (latestMatch) {
         const previousMatches = await matchesCollection
-          .find({ roundId: latestMatch.roundId })
+          .find({ ownerId, roundId: latestMatch.roundId })
           .toArray();
         priorityOrder = finishOrderPriority(previousMatches);
       }
@@ -97,10 +102,11 @@ export async function POST(request: Request) {
 
     // Re-shuffling replaces the previous unplayed rotation. Completed matches
     // stay intact so player records and the leaderboard are never lost.
-    await matchesCollection.deleteMany({ status: "scheduled" });
+    await matchesCollection.deleteMany({ ownerId, status: "scheduled" });
 
     type NewMatchDoc = Omit<MatchDoc, "_id">;
     const docs: NewMatchDoc[] = round.pairings.map((pairing, index) => ({
+      ownerId,
       roundId: round.roundId,
       court: usesQueue ? 1 : pairing.court,
       mode,
