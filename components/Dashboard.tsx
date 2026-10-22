@@ -429,6 +429,8 @@ export function Dashboard() {
             <PlayerRoster
               players={state.players}
               topPlayerIds={state.topPlayers.map((player) => player.id)}
+              onAdd={() => setPlayerModal({ mode: "add" })}
+              canAddPlayer={Boolean(state.activeRound)}
               onEdit={(player) => setPlayerModal({ mode: "edit", player })}
               onDelete={setDeletePlayer}
               onClearAll={() => setClearAllOpen(true)}
