@@ -7,7 +7,6 @@ import { Avatar } from "./Avatar";
 import {
   ChevronDownIcon,
   PencilIcon,
-  PlusIcon,
   SearchIcon,
   SparklesIcon,
   TrashIcon,
@@ -19,7 +18,6 @@ type Sort = "played" | "name" | "rating" | "wins";
 type PlayerRosterProps = {
   players: Player[];
   topPlayerIds: string[];
-  onAdd: () => void;
   onEdit: (player: Player) => void;
   onDelete: (player: Player) => void;
   onClearAll: () => void;
@@ -38,7 +36,6 @@ const SORT_LABELS: Record<Sort, string> = {
 export function PlayerRoster({
   players,
   topPlayerIds,
-  onAdd,
   onEdit,
   onDelete,
   onClearAll,
@@ -83,10 +80,6 @@ export function PlayerRoster({
               Clear all
             </button>
           ) : null}
-          <button type="button" className="btn btn-outline" onClick={onAdd}>
-            <PlusIcon size={17} />
-            Add player
-          </button>
         </div>
       </div>
 
@@ -105,10 +98,6 @@ export function PlayerRoster({
               keep the courts competitive.
             </p>
             <div className="roster-empty-actions">
-              <button type="button" className="btn btn-primary" onClick={onAdd}>
-                <PlusIcon size={17} />
-                Add first player
-              </button>
               <button type="button" className="btn btn-ghost" onClick={onLoadSample} disabled={sampleLoading}>
                 {sampleLoading ? <span className="spinner" aria-hidden /> : <SparklesIcon size={16} />}
                 {sampleLoading ? "Loading…" : "Load sample roster"}

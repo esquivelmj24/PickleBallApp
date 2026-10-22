@@ -296,15 +296,6 @@ export function Dashboard() {
             <span />
             Court desk live
           </span>
-          <button
-            type="button"
-            className="btn btn-dark btn-small"
-            onClick={() => setPlayerModal({ mode: "add" })}
-            aria-label="Add player"
-          >
-            <PlusIcon size={16} />
-            <span>Add player</span>
-          </button>
         </div>
       </header>
 
@@ -339,13 +330,6 @@ export function Dashboard() {
                 {stats.totalPlayers < 4 ? <PlusIcon size={18} /> : <SparklesIcon size={18} />}
                 {stats.totalPlayers < 4 ? "Build your roster" : "Go to rotation"}
                 <ArrowUpRightIcon size={17} />
-              </button>
-              <button
-                type="button"
-                className="btn btn-outline btn-large"
-                onClick={() => setPlayerModal({ mode: "add" })}
-              >
-                Add a player
               </button>
             </div>
             <div className="hero-proof">
@@ -445,7 +429,6 @@ export function Dashboard() {
             <PlayerRoster
               players={state.players}
               topPlayerIds={state.topPlayers.map((player) => player.id)}
-              onAdd={() => setPlayerModal({ mode: "add" })}
               onEdit={(player) => setPlayerModal({ mode: "edit", player })}
               onDelete={setDeletePlayer}
               onClearAll={() => setClearAllOpen(true)}
