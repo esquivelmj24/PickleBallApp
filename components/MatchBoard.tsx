@@ -514,30 +514,32 @@ export function MatchBoard({
           </p>
         </div>
 
-        {!needsSetup ? (
-          <div className="rotation-controls">
-            <span className="format-chip">
-              {mode === "open" ? <ShuffleIcon size={13} /> : <CheckIcon size={13} />}
-              {mode === "open" ? "Open Rate" : "Level match"}
-            </span>
-            <span className="format-chip">
-              <CourtIcon size={13} />
-              {singleCourtBoard
-                ? "Single court"
-                : `${roundCourtCount} court${roundCourtCount === 1 ? "" : "s"}`}
-            </span>
-            <button
-              type="button"
-              className="btn btn-clear btn-small rotation-reset"
-              onClick={onReset}
-              disabled={savingMatchId !== null || addingNext}
-              title="End this game session and return to setup"
-            >
-              <RotateIcon size={15} />
-              Reset
-            </button>
-          </div>
-        ) : null}
+        <div className="rotation-controls">
+          {!needsSetup ? (
+            <>
+              <span className="format-chip">
+                {mode === "open" ? <ShuffleIcon size={13} /> : <CheckIcon size={13} />}
+                {mode === "open" ? "Open Rate" : "Level match"}
+              </span>
+              <span className="format-chip">
+                <CourtIcon size={13} />
+                {singleCourtBoard
+                  ? "Single court"
+                  : `${roundCourtCount} court${roundCourtCount === 1 ? "" : "s"}`}
+              </span>
+            </>
+          ) : null}
+          <button
+            type="button"
+            className="btn btn-clear btn-small rotation-reset"
+            onClick={onReset}
+            disabled={savingMatchId !== null || addingNext}
+            title="Clear the current rotation and saved matches"
+          >
+            <RotateIcon size={15} />
+            Reset
+          </button>
+        </div>
       </div>
 
       {needsSetup ? (
@@ -799,12 +801,10 @@ export function MatchBoard({
               automatically until you reset.
             </span>
             <div className="setup-buttons">
-              {players.length < 4 ? (
-                <button type="button" className="btn btn-outline" onClick={onAddPlayer}>
-                  <PlusIcon size={17} />
-                  Add a player
-                </button>
-              ) : null}
+              <button type="button" className="btn btn-outline" onClick={onAddPlayer}>
+                <PlusIcon size={17} />
+                Add a player
+              </button>
               <button
                 type="button"
                 className="btn btn-primary btn-large"
