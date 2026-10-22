@@ -46,6 +46,7 @@ export function Dashboard() {
   const [playerModal, setPlayerModal] = useState<PlayerModalState>(null);
   const [lineupMatch, setLineupMatch] = useState<Match | null>(null);
   const [deletePlayer, setDeletePlayer] = useState<Player | null>(null);
+  const [resetGameOpen, setResetGameOpen] = useState(false);
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
@@ -96,6 +97,24 @@ export function Dashboard() {
     showToast(`${deletePlayer.name} removed from the roster.`);
     setDeletePlayer(null);
     await loadState();
+  }
+
+  async function handleResetGame() {
+    const result = await apiRequest<{ players: number; matches: number }>(
+      "/api/reset/session",
+      {
+        method: "DELETE",
+        body: JSON.stringify({ confirm: "RESET" }),
+      },
+    );
+    setResetGameOpen(false);
+    await loadState();
+    showToast(
+      `Game reset. ${result.matches} match${result.matches === 1 ? "" : "es"} cleared; roster and ratings kept.`,
+    );
+    window.setTimeout(() => {
+      document.getElementById("rotation")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
   }
 
   async function handleClearAll() {
@@ -420,6 +439,7 @@ export function Dashboard() {
               onSaveScore={handleSaveScore}
               onEditLineup={setLineupMatch}
               onAddPlayer={() => setPlayerModal({ mode: "add" })}
+              onReset={() => setResetGameOpen(true)}
             />
 
             <PlayerRoster
@@ -486,6 +506,19 @@ export function Dashboard() {
           confirmLabel="Remove player"
           onClose={() => setDeletePlayer(null)}
           onConfirm={handleDeletePlayer}
+        />
+      ) : null}
+
+      {resetGameOpen ? (
+        <ConfirmDialog
+          title="Reset the game?"
+          message="This clears the current rotation, all saved matches, and the session W/L totals for every player. The roster and ratings are kept. You will return to setup to start a new game."
+          confirmLabel="Reset game"
+          cancelLabel="Keep playing"
+          workingLabel="Resetting…"
+          requirePhrase="RESET"
+          onClose={() => setResetGameOpen(false)}
+          onConfirm={handleResetGame}
         />
       ) : null}
 

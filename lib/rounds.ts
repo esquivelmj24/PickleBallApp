@@ -102,7 +102,7 @@ async function advanceRoundIfCompleteUnlocked(db: Db): Promise<AdvanceRoundResul
     updatedAt: now,
   }));
 
-  await matches.insertMany(docs);
+  await db.collection<NewMatchDoc>("matches").insertMany(docs);
 
   return {
     advanced: true,

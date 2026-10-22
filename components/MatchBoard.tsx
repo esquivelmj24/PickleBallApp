@@ -16,6 +16,7 @@ import {
   MinusIcon,
   PencilIcon,
   PlusIcon,
+  RotateIcon,
   ShuffleIcon,
   TrophyIcon,
 } from "./icons";
@@ -28,6 +29,7 @@ type MatchBoardProps = {
   onSaveScore: (matchId: string, team1Score: number, team2Score: number) => Promise<void>;
   onEditLineup: (match: Match) => void;
   onAddPlayer: () => void;
+  onReset: () => void;
 };
 
 type CourtCardProps = {
@@ -257,6 +259,7 @@ export function MatchBoard({
   onSaveScore,
   onEditLineup,
   onAddPlayer,
+  onReset,
 }: MatchBoardProps) {
   const [mode, setMode] = useState<MatchMode>("level");
   const [layout, setLayout] = useState<CourtLayout>("single");
@@ -429,16 +432,16 @@ export function MatchBoard({
               4 - availablePlayers.length === 1 ? "" : "s"
             } needed for the next group.`
           : activeRound.mode === "level" && !availableTier
-            ? "No available rating band has four players. Finish the current court, then shuffle a new Open Rate round."
+            ? "No available rating band has four players right now."
             : `Queues another Next Player group · ${availablePlayers.length} available.`
         : nextCourtNumber === null
-          ? `Maximum of ${MAX_COURTS} courts reached. Shuffle a new round to continue.`
+          ? `Maximum of ${MAX_COURTS} courts reached. The next rotation reuses the same courts.`
           : availablePlayers.length < 4
             ? `${4 - availablePlayers.length} more available player${
                 4 - availablePlayers.length === 1 ? "" : "s"
               } needed for another court.`
             : activeRound.mode === "level" && !availableTier
-              ? "No available rating band has four players. Finish the current court, then shuffle a new Open Rate round."
+              ? "No available rating band has four players right now."
               : `Adds ${courtName(nextCourtNumber, false)} · ${availablePlayers.length} available.`;
 
   function handleLayoutChange(nextLayout: CourtLayout) {
@@ -492,22 +495,22 @@ export function MatchBoard({
           <h2 id="rotation-title">{needsSetup ? "Set up the game" : "Current rotation"}</h2>
           <p>
             {needsSetup
-              ? roundComplete
-                ? "Round complete. Choose the format and courts for the next game."
-                : "Choose the match format, court layout, and number of courts before the first teams appear."
-              : singleCourtBoard
-                ? `Single court in play${
-                    queuedCount
-                      ? queuedCount === 1
-                        ? " · Next Player ready"
-                        : ` · Next Player + ${queuedCount - 1} more queued`
-                      : ""
-                  } · ${completed} of ${total} scored`
-                : `${activeCount} court${activeCount === 1 ? "" : "s"} in play${
-                    queuedCount
-                      ? ` · ${queuedCount} next lineup${queuedCount === 1 ? "" : "s"}`
-                      : ""
-                  } · ${completed} of ${total} scored`}
+              ? "Choose the match format, court layout, and number of courts before the first teams appear."
+              : displayedMatches.length === 0
+                ? "Round complete · the next rotation starts automatically"
+                : singleCourtBoard
+                  ? `Single court in play${
+                      queuedCount
+                        ? queuedCount === 1
+                          ? " · Next Player ready"
+                          : ` · Next Player + ${queuedCount - 1} more queued`
+                        : ""
+                    } · ${completed} of ${total} scored`
+                  : `${activeCount} court${activeCount === 1 ? "" : "s"} in play${
+                      queuedCount
+                        ? ` · ${queuedCount} next lineup${queuedCount === 1 ? "" : "s"}`
+                        : ""
+                    } · ${completed} of ${total} scored`}
           </p>
         </div>
 
@@ -521,8 +524,18 @@ export function MatchBoard({
               <CourtIcon size={13} />
               {singleCourtBoard
                 ? "Single court"
-                : `${activeCount} court${activeCount === 1 ? "" : "s"}`}
+                : `${roundCourtCount} court${roundCourtCount === 1 ? "" : "s"}`}
             </span>
+            <button
+              type="button"
+              className="btn btn-clear btn-small rotation-reset"
+              onClick={onReset}
+              disabled={savingMatchId !== null || addingNext}
+              title="End this game session and return to setup"
+            >
+              <RotateIcon size={15} />
+              Reset
+            </button>
           </div>
         ) : null}
       </div>
@@ -634,7 +647,7 @@ export function MatchBoard({
           <span className="mode-note setup-layout-note">
             {layout === "single"
               ? "Court + Next Player queue · the next group is locked until the current result is saved"
-              : "First finishers go first, then waiting players"}
+              : "Fewest games first · first finishers and longest rest break ties"}
           </span>
 
           <div className={`auto-level-rule ${mode === "open" ? "is-open" : ""}`}>
@@ -648,8 +661,8 @@ export function MatchBoard({
                   Intermediate, and High Intermediate players.
                   <span>
                     {layout === "multiple"
-                      ? " Multiple-court shuffle ranks first finishers, then waiting players."
-                      : " Fair play counts still decide who gets the next game."}
+                      ? " Multiple-court shuffle prioritizes the fewest games first, then first finishers."
+                      : " Fewest games first so late arrivals can catch up."}
                   </span>
                 </>
               ) : (
@@ -658,7 +671,7 @@ export function MatchBoard({
                   intermediate plays low intermediate, and high intermediate plays high intermediate.
                   <span>
                     {layout === "multiple"
-                      ? " First finishers are ranked first within their level, then waiting players."
+                      ? " Fewest games first within each level; first finishers break ties."
                       : " Manual lineup changes are not rate-restricted."}
                   </span>
                 </>
@@ -681,8 +694,8 @@ export function MatchBoard({
             ) : (
               <>
                 Use <strong>Add next lineup</strong> to show another court, up to{" "}
-                <strong>{MAX_COURTS} courts</strong>. Shuffle unlocks after every active court
-                has a score.
+                <strong>{MAX_COURTS} courts</strong>. The next rotation builds
+                automatically after every active court has a score.
               </>
             )}
           </span>
@@ -782,9 +795,8 @@ export function MatchBoard({
 
           <div className="setup-actions">
             <span className="setup-note">
-              {roundComplete
-                ? "The previous round is complete. Review the format and start the next game."
-                : "Review the format and court count, then start the first game."}
+              Review the format and court count, then start the game. The queue continues
+              automatically until you reset.
             </span>
             <div className="setup-buttons">
               {players.length < 4 ? (
@@ -810,6 +822,25 @@ export function MatchBoard({
                 {startButtonLabel}
               </button>
             </div>
+          </div>
+        </div>
+      ) : displayedMatches.length === 0 ? (
+        <div className="rotation-empty">
+          <div className="empty-court" aria-hidden>
+            <span className="empty-net" />
+            <span className="empty-ball" />
+          </div>
+          <h3>Preparing the next rotation</h3>
+          <p>
+            All results are saved. The next queue starts automatically as soon as a full
+            group is available. If the roster cannot form another court, add a player or
+            reset the game to change the setup.
+          </p>
+          <div className="rotation-empty-actions">
+            <button type="button" className="btn btn-outline btn-small" onClick={onAddPlayer}>
+              <PlusIcon size={15} />
+              Add a player
+            </button>
           </div>
         </div>
       ) : (
@@ -855,7 +886,7 @@ export function MatchBoard({
                       ? " across all levels."
                       : " within their level."
                   }`
-                : "Finished players are ranked first for the next shuffle; waiting players follow."
+                : "Fewest games first for the next rotation; first finishers break ties."
               : "Available for the next rotation."}
           </span>
         </div>
