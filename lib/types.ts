@@ -1,3 +1,4 @@
+import type { Gender } from "./constants";
 import type { LevelKey } from "./levels";
 
 export type Player = {
@@ -49,7 +50,20 @@ export type TierCount = {
   count: number;
 };
 
+export type Viewer = {
+  role: "admin" | "player";
+  alias: string;
+  rating?: number;
+  gender?: Gender;
+  joined: boolean;
+  canJoin: boolean;
+  playerId?: string;
+  boardOwnerAlias?: string;
+  message?: string;
+};
+
 export type AppState = {
+  viewer: Viewer;
   players: Player[];
   activeRound: {
     roundId: string;

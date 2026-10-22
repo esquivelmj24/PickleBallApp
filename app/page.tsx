@@ -7,5 +7,5 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const user = await getSessionUser();
   if (!user) redirect("/login");
-  return <Dashboard alias={user.alias} />;
+  return <Dashboard alias={user.alias} role={user.role} />;
 }

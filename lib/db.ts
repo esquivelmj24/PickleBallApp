@@ -1,4 +1,5 @@
 import { MongoClient, type Db, type ObjectId } from "mongodb";
+import type { Gender } from "./constants";
 
 const uri = process.env.MONGODB_URI;
 
@@ -40,6 +41,7 @@ export async function getDb(): Promise<Db> {
       await Promise.all([
         db.collection("players").createIndex({ ownerId: 1, nameKey: 1 }, { unique: true }),
         db.collection("players").createIndex({ ownerId: 1, name: 1 }),
+        db.collection("players").createIndex({ userId: 1 }, { unique: true, sparse: true }),
         db.collection("users").createIndex({ aliasKey: 1 }, { unique: true }),
         db.collection("matches").createIndex({ ownerId: 1, createdAt: -1 }),
         db.collection("matches").createIndex({ ownerId: 1, status: 1, createdAt: -1 }),
@@ -69,7 +71,9 @@ export type UserDoc = {
   alias: string;
   aliasKey: string;
   passwordHash: string;
-  role: "admin";
+  role: "admin" | "player";
+  rating?: number;
+  gender?: Gender;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -77,7 +81,9 @@ export type UserDoc = {
 export type PlayerDoc = {
   _id: ObjectId;
   ownerId: ObjectId;
+  userId?: ObjectId;
   name: string;
+  gender?: Gender;
   nameKey: string;
   rating: number;
   gamesPlayed: number;

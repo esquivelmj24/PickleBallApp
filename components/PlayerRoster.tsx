@@ -6,6 +6,7 @@ import type { Player } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import {
   ChevronDownIcon,
+  LockIcon,
   PencilIcon,
   PlusIcon,
   SearchIcon,
@@ -27,6 +28,8 @@ type PlayerRosterProps = {
   canClearAll: boolean;
   onLoadSample: () => Promise<void>;
   sampleLoading: boolean;
+  readOnly?: boolean;
+  viewerPlayerId?: string;
 };
 
 const SORT_LABELS: Record<Sort, string> = {
@@ -47,6 +50,8 @@ export function PlayerRoster({
   canClearAll,
   onLoadSample,
   sampleLoading,
+  readOnly = false,
+  viewerPlayerId,
 }: PlayerRosterProps) {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -74,23 +79,36 @@ export function PlayerRoster({
     <section className="panel roster-panel" id="players" aria-labelledby="roster-title">
       <div className="roster-head">
         <div>
-          <span className="eyebrow">Committee roster</span>
+          <span className="eyebrow">{readOnly ? "Game roster" : "Committee roster"}</span>
           <h2 id="roster-title">Players &amp; ratings</h2>
-          <p>Track rates and keep an eye on who has played the most.</p>
+          <p>
+            {readOnly
+              ? "See who is on the board, their registered rates, and how many games they have played."
+              : "Track rates and keep an eye on who has played the most."}
+          </p>
         </div>
         <div className="roster-head-actions">
-          {canClearAll ? (
-            <button type="button" className="btn btn-clear" onClick={onClearAll}>
-              <TrashIcon size={16} />
-              Clear all
-            </button>
-          ) : null}
-          {canAddPlayer ? (
-            <button type="button" className="btn btn-outline" onClick={onAdd}>
-              <PlusIcon size={17} />
-              Add player
-            </button>
-          ) : null}
+          {readOnly ? (
+            <span className="view-only-chip">
+              <LockIcon size={13} />
+              View only
+            </span>
+          ) : (
+            <>
+              {canClearAll ? (
+                <button type="button" className="btn btn-clear" onClick={onClearAll}>
+                  <TrashIcon size={16} />
+                  Clear all
+                </button>
+              ) : null}
+              {canAddPlayer ? (
+                <button type="button" className="btn btn-outline" onClick={onAdd}>
+                  <PlusIcon size={17} />
+                  Add player
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
 
@@ -103,17 +121,20 @@ export function PlayerRoster({
             <span className="sheet-ball" />
           </div>
           <div>
-            <h3>Build your roster</h3>
+            <h3>{readOnly ? "No players on the board yet" : "Build your roster"}</h3>
             <p>
-              Enter each player&apos;s name and the rate set by the committee. Ratings
-              keep the courts competitive.
+              {readOnly
+                ? "The admin will add players to the board, or players can join from the game page."
+                : "Enter each player's name and the rate set by the committee. Ratings keep the courts competitive."}
             </p>
-            <div className="roster-empty-actions">
-              <button type="button" className="btn btn-ghost" onClick={onLoadSample} disabled={sampleLoading}>
-                {sampleLoading ? <span className="spinner" aria-hidden /> : <SparklesIcon size={16} />}
-                {sampleLoading ? "Loading…" : "Load sample roster"}
-              </button>
-            </div>
+            {!readOnly ? (
+              <div className="roster-empty-actions">
+                <button type="button" className="btn btn-ghost" onClick={onLoadSample} disabled={sampleLoading}>
+                  {sampleLoading ? <span className="spinner" aria-hidden /> : <SparklesIcon size={16} />}
+                  {sampleLoading ? "Loading…" : "Load sample roster"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : (
@@ -182,15 +203,16 @@ export function PlayerRoster({
                   <th>Committee rate</th>
                   <th>Played</th>
                   <th>Record</th>
-                  <th><span className="sr-only">Actions</span></th>
+                  {!readOnly ? <th><span className="sr-only">Actions</span></th> : null}
                 </tr>
               </thead>
               <tbody>
                 {filteredPlayers.map((player) => {
                   const level = getLevel(player.rating);
                   const rank = topPlayerIds.indexOf(player.id);
+                  const isViewer = player.id === viewerPlayerId;
                   return (
-                    <tr key={player.id}>
+                    <tr key={player.id} className={isViewer ? "is-viewer" : undefined}>
                       <td>
                         <div className="player-cell">
                           <div className="player-avatar-wrap">
@@ -198,7 +220,10 @@ export function PlayerRoster({
                             {rank >= 0 ? <span className="rank-star">{rank + 1}</span> : null}
                           </div>
                           <div className="player-name-cell">
-                            <strong>{player.name}</strong>
+                            <strong>
+                              {player.name}
+                              {isViewer ? <span className="you-badge">You</span> : null}
+                            </strong>
                             <span>
                               {player.gamesPlayed === 0
                                 ? "Yet to play"
@@ -235,28 +260,30 @@ export function PlayerRoster({
                           <span className="record-losses">{player.losses}L</span>
                         </div>
                       </td>
-                      <td>
-                        <div className="row-actions">
-                          <button
-                            type="button"
-                            className="icon-btn"
-                            onClick={() => onEdit(player)}
-                            aria-label={`Edit ${player.name}`}
-                            title="Edit player"
-                          >
-                            <PencilIcon size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-btn icon-btn-danger"
-                            onClick={() => onDelete(player)}
-                            aria-label={`Remove ${player.name}`}
-                            title="Remove player"
-                          >
-                            <TrashIcon size={16} />
-                          </button>
-                        </div>
-                      </td>
+                      {!readOnly ? (
+                        <td>
+                          <div className="row-actions">
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              onClick={() => onEdit(player)}
+                              aria-label={`Edit ${player.name}`}
+                              title="Edit player"
+                            >
+                              <PencilIcon size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn icon-btn-danger"
+                              onClick={() => onDelete(player)}
+                              aria-label={`Remove ${player.name}`}
+                              title="Remove player"
+                            >
+                              <TrashIcon size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}
@@ -286,7 +313,9 @@ export function PlayerRoster({
               Showing {filteredPlayers.length} of {players.length} players
             </span>
             <span className="roster-foot-note">
-              Played counts update only when a score is saved.
+              {readOnly
+                ? "View-only roster. The admin updates players and scores."
+                : "Played counts update only when a score is saved."}
             </span>
           </div>
         </>

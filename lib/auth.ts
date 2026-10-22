@@ -1,14 +1,17 @@
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { ObjectId } from "mongodb";
 import { cookies } from "next/headers";
+import { GENDERS, type Gender } from "./constants";
 
 export const SESSION_COOKIE = "pc_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
+export type UserRole = "admin" | "player";
+
 export type SessionUser = {
   id: string;
   alias: string;
-  role: "admin";
+  role: UserRole;
 };
 
 type SessionPayload = SessionUser & {
@@ -64,9 +67,10 @@ export function verifySessionToken(token: string | undefined | null): SessionUse
 
   try {
     const payload = JSON.parse(Buffer.from(data, "base64url").toString("utf8")) as SessionPayload;
-    if (!payload?.id || payload.role !== "admin" || typeof payload.exp !== "number") return null;
+    const validRole = payload.role === "admin" || payload.role === "player";
+    if (!payload?.id || !validRole || typeof payload.exp !== "number") return null;
     if (payload.exp < Date.now()) return null;
-    return { id: payload.id, alias: payload.alias, role: "admin" };
+    return { id: payload.id, alias: payload.alias, role: payload.role };
   } catch {
     return null;
   }
@@ -98,6 +102,11 @@ export async function requireAdmin(): Promise<SessionUser | null> {
   return user?.role === "admin" ? user : null;
 }
 
+export async function requirePlayer(): Promise<SessionUser | null> {
+  const user = await getSessionUser();
+  return user?.role === "player" ? user : null;
+}
+
 /**
  * Every player and match belongs to exactly one admin account. API routes use
  * this helper to scope every read and write to the signed-in admin.
@@ -109,6 +118,20 @@ export function ownerObjectId(user: SessionUser): ObjectId {
 export function unauthorizedResponse() {
   return Response.json(
     { error: "Admin access required. Sign in with an admin account." },
+    { status: 401 },
+  );
+}
+
+export function signInRequiredResponse() {
+  return Response.json(
+    { error: "Sign in to view the court board." },
+    { status: 401 },
+  );
+}
+
+export function playerAccessRequiredResponse() {
+  return Response.json(
+    { error: "Player access required. Sign in with a player account to join a game." },
     { status: 401 },
   );
 }
@@ -129,4 +152,9 @@ export function validatePassword(value: unknown): string | null {
 
 export function aliasKey(alias: string): string {
   return alias.normalize("NFKC").toLowerCase();
+}
+
+export function validateGender(value: unknown): Gender | null {
+  if (typeof value !== "string") return null;
+  return GENDERS.some((gender) => gender.value === value) ? (value as Gender) : null;
 }

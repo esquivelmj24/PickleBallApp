@@ -6,9 +6,12 @@ import {
   hashPassword,
   setSessionCookie,
   validateAlias,
+  validateGender,
   validatePassword,
+  type UserRole,
 } from "@/lib/auth";
 import { claimLegacyData, getDb, type UserDoc } from "@/lib/db";
+import { normalizeRating } from "@/lib/levels";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,24 +21,51 @@ export async function POST(request: Request) {
     const body = await readBody(request);
     const alias = validateAlias(body.alias);
     const password = validatePassword(body.password);
+    const role: UserRole | null =
+      body.role === "player"
+        ? "player"
+        : body.role === "admin" || body.admin === true
+          ? "admin"
+          : null;
 
     if (!alias) {
-      return jsonError("Alias must be 3–30 characters using letters, numbers, spaces, dots, dashes, or underscores.");
+      return jsonError(
+        "Alias must be 3–30 characters using letters, numbers, spaces, dots, dashes, or underscores.",
+      );
     }
     if (!password) {
       return jsonError("Password must be between 8 and 128 characters.");
     }
-    if (body.admin !== true) {
-      return jsonError("Confirm the admin user checkbox to create an admin account.");
+    if (!role) {
+      return jsonError("Choose Admin user or Player user to create an account.");
+    }
+
+    let rating: number | undefined;
+    let gender: UserDoc["gender"];
+
+    if (role === "player") {
+      const normalizedRating = normalizeRating(body.rating);
+      const normalizedGender = validateGender(body.gender);
+
+      if (normalizedRating === null) {
+        return jsonError("Rate must be between 2.0 and 4.0.");
+      }
+      if (!normalizedGender) {
+        return jsonError("Choose a gender for the player account.");
+      }
+
+      rating = normalizedRating;
+      gender = normalizedGender;
     }
 
     const db = await getDb();
     const now = new Date();
-    const doc = {
+    const doc: Omit<UserDoc, "_id"> = {
       alias,
       aliasKey: aliasKey(alias),
       passwordHash: hashPassword(password),
-      role: "admin" as const,
+      role,
+      ...(role === "player" ? { rating, gender } : {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -49,11 +79,18 @@ export async function POST(request: Request) {
     await setSessionCookie({
       id: result.insertedId.toString(),
       alias,
-      role: "admin",
+      role,
     });
 
     return NextResponse.json(
-      { user: { id: result.insertedId.toString(), alias, role: "admin" } },
+      {
+        user: {
+          id: result.insertedId.toString(),
+          alias,
+          role,
+          ...(role === "player" ? { rating, gender } : {}),
+        },
+      },
       { status: 201 },
     );
   } catch (error) {
@@ -61,6 +98,6 @@ export async function POST(request: Request) {
       return jsonError("That alias is already registered. Choose another one.", 409);
     }
     console.error("POST /api/auth/register failed", error);
-    return jsonError("Could not create the admin account.", 500);
+    return jsonError("Could not create the account.", 500);
   }
 }

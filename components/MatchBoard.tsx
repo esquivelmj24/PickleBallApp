@@ -30,6 +30,7 @@ type MatchBoardProps = {
   onEditLineup: (match: Match) => void;
   onAddPlayer: () => void;
   onReset: () => void;
+  readOnly?: boolean;
 };
 
 type CourtCardProps = {
@@ -39,9 +40,18 @@ type CourtCardProps = {
   saving: boolean;
   onSaveScore: (matchId: string, team1Score: number, team2Score: number) => Promise<void>;
   onEditLineup: (match: Match) => void;
+  readOnly: boolean;
 };
 
-function CourtCard({ match, queued, singleCourt, saving, onSaveScore, onEditLineup }: CourtCardProps) {
+function CourtCard({
+  match,
+  queued,
+  singleCourt,
+  saving,
+  onSaveScore,
+  onEditLineup,
+  readOnly,
+}: CourtCardProps) {
   const [score1, setScore1] = useState(match.team1Score?.toString() ?? "");
   const [score2, setScore2] = useState(match.team2Score?.toString() ?? "");
   const [error, setError] = useState("");
@@ -186,6 +196,29 @@ function CourtCard({ match, queued, singleCourt, saving, onSaveScore, onEditLine
                 : `Locked until ${activeCourtName} is clear`}
             </span>
           </>
+        ) : readOnly ? (
+          <>
+            <div className="readonly-score">
+              <span className="score-label">Score</span>
+              <strong>{match.team1Score ?? "—"}</strong>
+              <span className="score-colon">:</span>
+              <strong>{match.team2Score ?? "—"}</strong>
+              <span className="score-status">
+                {completed ? "Final" : "Awaiting admin"}
+              </span>
+            </div>
+            {completed ? (
+              <span className="final-note result-note">
+                <span className="result-win">Team {winningTeam === 1 ? "A" : "B"} won</span>
+                <span className="result-loss">Team {losingTeam === 1 ? "A" : "B"} lost</span>
+              </span>
+            ) : (
+              <span className="score-managed-note">
+                <LockIcon size={13} />
+                Scores are managed by the admin
+              </span>
+            )}
+          </>
         ) : (
           <>
             <div className="score-entry">
@@ -241,7 +274,7 @@ function CourtCard({ match, queued, singleCourt, saving, onSaveScore, onEditLine
         )}
       </div>
 
-      {error ? (
+      {!readOnly && error ? (
         <div className="court-error" role="alert">
           <AlertIcon size={14} />
           <span>{error}</span>
@@ -260,6 +293,7 @@ export function MatchBoard({
   onEditLineup,
   onAddPlayer,
   onReset,
+  readOnly = false,
 }: MatchBoardProps) {
   const [mode, setMode] = useState<MatchMode>("level");
   const [layout, setLayout] = useState<CourtLayout>("single");
@@ -491,11 +525,17 @@ export function MatchBoard({
     <section className="panel rotation-panel" id="rotation" aria-labelledby="rotation-title">
       <div className="rotation-head">
         <div>
-          <span className="eyebrow">{needsSetup ? "Pre-game setup" : "Live rotation"}</span>
-          <h2 id="rotation-title">{needsSetup ? "Set up the game" : "Current rotation"}</h2>
+          <span className="eyebrow">
+            {needsSetup ? (readOnly ? "Game board" : "Pre-game setup") : "Live rotation"}
+          </span>
+          <h2 id="rotation-title">
+            {needsSetup ? (readOnly ? "Waiting for the first serve" : "Set up the game") : "Current rotation"}
+          </h2>
           <p>
             {needsSetup
-              ? "Choose the match format, court layout, and number of courts before the first teams appear."
+              ? readOnly
+                ? "The admin is preparing the first rotation. Join now and your registered rate will be used when teams are built."
+                : "Choose the match format, court layout, and number of courts before the first teams appear."
               : displayedMatches.length === 0
                 ? "Round complete · the next rotation starts automatically"
                 : singleCourtBoard
@@ -529,20 +569,22 @@ export function MatchBoard({
               </span>
             </>
           ) : null}
-          <button
-            type="button"
-            className="btn btn-clear btn-small rotation-reset"
-            onClick={onReset}
-            disabled={savingMatchId !== null || addingNext}
-            title="Clear the current rotation and saved matches"
-          >
-            <RotateIcon size={15} />
-            Reset
-          </button>
+          {!readOnly ? (
+            <button
+              type="button"
+              className="btn btn-clear btn-small rotation-reset"
+              onClick={onReset}
+              disabled={savingMatchId !== null || addingNext}
+              title="Clear the current rotation and saved matches"
+            >
+              <RotateIcon size={15} />
+              Reset
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {needsSetup ? (
+      {needsSetup && !readOnly ? (
         <>
           <div className="setup-step-label">
             <span>1</span>
@@ -683,7 +725,7 @@ export function MatchBoard({
         </>
       ) : null}
 
-      {activeRound && hasPendingCourt ? (
+      {!readOnly && activeRound && hasPendingCourt ? (
         <div className="queue-hint">
           <CourtIcon size={14} />
           <span>
@@ -704,7 +746,7 @@ export function MatchBoard({
         </div>
       ) : null}
 
-      {activeRound && hasPendingCourt ? (
+      {!readOnly && activeRound && hasPendingCourt ? (
         <div className="queue-actions">
           <div className="queue-action-copy">
             <strong>{singleCourtBoard ? "Add next player" : "Add another court"}</strong>
@@ -750,7 +792,20 @@ export function MatchBoard({
         </div>
       ) : null}
 
-      {needsSetup ? (
+      {needsSetup && readOnly ? (
+        <div className="rotation-empty read-only-empty">
+          <div className="empty-court" aria-hidden>
+            <span className="empty-net" />
+            <span className="empty-ball" />
+          </div>
+          <h3>The first rotation is being prepared</h3>
+          <p>
+            There are {players.length} player{players.length === 1 ? "" : "s"} on the roster.
+            The admin will start the first rotation when enough players are ready. Joining
+            adds your registered alias and rate to the player pool.
+          </p>
+        </div>
+      ) : needsSetup ? (
         <div className="game-setup">
           <div className="setup-summary">
             <div className="setup-summary-item">
@@ -832,16 +887,18 @@ export function MatchBoard({
           </div>
           <h3>Preparing the next rotation</h3>
           <p>
-            All results are saved. The next queue starts automatically as soon as a full
-            group is available. If the roster cannot form another court, add a player or
-            reset the game to change the setup.
+            {readOnly
+              ? "All results are saved. The next queue starts automatically as soon as a full group is available. The admin manages the roster and rotation."
+              : "All results are saved. The next queue starts automatically as soon as a full group is available. If the roster cannot form another court, add a player or reset the game to change the setup."}
           </p>
-          <div className="rotation-empty-actions">
-            <button type="button" className="btn btn-outline btn-small" onClick={onAddPlayer}>
-              <PlusIcon size={15} />
-              Add a player
-            </button>
-          </div>
+          {!readOnly ? (
+            <div className="rotation-empty-actions">
+              <button type="button" className="btn btn-outline btn-small" onClick={onAddPlayer}>
+                <PlusIcon size={15} />
+                Add a player
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : (
         <div className="court-grid">
@@ -854,6 +911,7 @@ export function MatchBoard({
               saving={savingMatchId === match.id}
               onSaveScore={handleScore}
               onEditLineup={onEditLineup}
+              readOnly={readOnly}
             />
           ))}
         </div>

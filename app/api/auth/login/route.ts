@@ -27,14 +27,23 @@ export async function POST(request: Request) {
       console.error("Legacy data migration failed", error);
     });
 
+    const role = user.role === "player" ? "player" : "admin";
+
     await setSessionCookie({
       id: user._id.toString(),
       alias: user.alias,
-      role: "admin",
+      role,
     });
 
     return NextResponse.json({
-      user: { id: user._id.toString(), alias: user.alias, role: user.role },
+      user: {
+        id: user._id.toString(),
+        alias: user.alias,
+        role,
+        ...(role === "player"
+          ? { rating: user.rating, gender: user.gender }
+          : {}),
+      },
     });
   } catch (error) {
     console.error("POST /api/auth/login failed", error);

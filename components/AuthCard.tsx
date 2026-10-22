@@ -11,7 +11,7 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
         <Link className="brand" href="/login" aria-label="Pickle & Chill">
           <span className="brand-copy">
             <strong>PICKLE &amp; CHILL</strong>
-            <small>Committee console</small>
+            <small>Balanced courts, better games</small>
           </span>
         </Link>
         <div className="auth-topbar-actions">
@@ -21,18 +21,18 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
 
       <main className="auth-main">
         <section className="auth-card panel" aria-labelledby="auth-title">
-          <span className="eyebrow">{isRegister ? "Admin registration" : "Admin sign in"}</span>
-          <h1 id="auth-title">{isRegister ? "Create your admin account" : "Welcome back"}</h1>
+          <span className="eyebrow">{isRegister ? "Account registration" : "Welcome back"}</span>
+          <h1 id="auth-title">{isRegister ? "Create your account" : "Welcome back"}</h1>
           <p className="auth-lede">
             {isRegister
-              ? "Every field is required. This account gets its own private roster, courts, scores, and game history."
-              : "Sign in with your alias and password to manage your own players, courts, and scores."}
+              ? "Choose an Admin user to run the board, or a Player user to view the live courts and join games."
+              : "Sign in to manage the court board or join the club game."}
           </p>
 
           <AuthForm mode={mode} />
 
           <p className="auth-switch">
-            {isRegister ? "Already registered?" : "Need an admin account?"}{" "}
+            {isRegister ? "Already registered?" : "Need an account?"}{" "}
             <Link href={isRegister ? "/login" : "/register"}>
               {isRegister ? "Sign in" : "Register"}
             </Link>
@@ -41,8 +41,8 @@ export function AuthCard({ mode }: { mode: "login" | "register" }) {
       </main>
 
       <footer className="auth-footer">
-        <span>Pickle &amp; Chill · Admin access only</span>
-        <span>Each account has its own private game board</span>
+        <span>Pickle &amp; Chill · Balanced courts, better games</span>
+        <span>Admins manage the board. Players join and follow the game.</span>
       </footer>
     </div>
   );

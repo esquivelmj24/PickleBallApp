@@ -6,7 +6,10 @@ Built with **Next.js 15 (App Router)**, **TypeScript**, and **MongoDB**.
 
 ## Features
 
-- **Admin accounts with private game boards** — register with an alias, password, and the mandatory **Admin user** confirmation. Passwords are hashed with scrypt, and signed HTTP-only session cookies keep admins signed in for seven days. Every player, match, and reset is scoped to the signed-in admin, so each admin sees and manages only their own games.
+- **Admin and player accounts** — choose **Admin user** or **Player user** during registration. Admins register with an alias and password. Players register with an alias, password, **Rate** (2.0–4.0), and **Gender**. Passwords are hashed with scrypt, and signed HTTP-only session cookies keep users signed in for seven days.
+- **Private admin boards** — every player, match, and reset is scoped to the signed-in admin, so each admin creates and manages only their own games.
+- **Player participation** — a signed-in player lands on the **Balanced Courts, Better Games** dashboard and sees the board they joined, or the most recently active admin board before joining. Players can review game and player details, but all setup, score, lineup, reset, and roster controls are hidden. The only write action is **Join game**.
+- **Rate-based Join** — Join is idempotent and always uses the player account's registered alias and rate. It links an existing same-name roster entry when possible, otherwise adds a new player, then makes that player available for the next balanced rotation.
 - **Background themes** — choose **Classic**, **Dark**, **Gray**, or **Black & Yellow** from the theme selector. The choice is saved in the browser and applied on the login and dashboard screens.
 - **Committee-assigned ratings** — enter a player's name and set a rating from 2.0 to 4.0 with a slider, stepper, or exact number input.
 - **Rating bands** — the level is calculated automatically:
@@ -46,7 +49,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). On first run, open [http://localhost:3000/register](http://localhost:3000/register) and create an admin account. The dashboard is at `/` and requires that session. Each admin account has its own private board.
+Open [http://localhost:3000](http://localhost:3000). On first run, open [http://localhost:3000/register](http://localhost:3000/register) and create an **Admin user** account to start a board. Players can register from the same screen as **Player user** with their alias, password, rate, and gender. The dashboard is at `/` and requires a session. Each admin account has its own private board; player accounts see the board they joined or the most recently active admin board.
 
 ### Environment variables
 
@@ -66,11 +69,11 @@ Credentials belong in `.env.local`, which is ignored by Git. Never commit databa
 
 The app creates these collections automatically:
 
-- `players` — `ownerId` (admin account), name, rating, play counts, record, point totals
+- `players` — `ownerId` (admin account), optional `userId` for a linked player account, name, optional gender, rating, play counts, record, point totals
 - `matches` — `ownerId` (admin account), round id, court number, matchmaking mode, queue position, team snapshots, scores, status
-- `users` — admin alias, normalized alias key, scrypt password hash, role, and timestamps
+- `users` — alias, normalized alias key, scrypt password hash, role (`admin` or `player`), optional player rate and gender, and timestamps
 
-Player names are unique per admin, not across the whole database. Indexes for owner-scoped player names, admin alias uniqueness, and owner-scoped match lookups are created on first connection.
+Player names are unique per admin, not across the whole database. Indexes for owner-scoped player names, account alias uniqueness, sparse player-account links, and owner-scoped match lookups are created on first connection.
 
 To try the interface with a sample roster, use **Load sample roster** in the empty roster panel. It is only available while the roster is empty.
 
@@ -167,36 +170,46 @@ The Top 5 updates after each saved result:
 
 Until the first result is entered, the top five are ordered by committee rating.
 
-## Authentication and admin isolation
+## Authentication, roles, and isolation
 
-### Admin registration and login
+### Registration and login
 
-- Registration requires **Alias**, **Password**, and the **Admin user** checkbox. Alias and password are both mandatory.
+- Choose **Admin user** or **Player user** on the registration form.
+- An **Admin user** needs **Alias** and **Password**.
+- A **Player user** needs **Alias**, **Password**, **Rate** (2.0–4.0), and **Gender**.
 - Aliases are case-insensitive and must be 3–30 characters. Passwords must be 8–128 characters.
-- Successful registration signs the admin in and redirects to the dashboard.
+- Successful registration signs the account in and redirects to the **Balanced Courts, Better Games** dashboard at `/`.
 - Login rejects unknown aliases and wrong passwords with the same message: **“Invalid alias or password. Please try again.”**
-- Sessions are stored in a signed, HTTP-only `pc_session` cookie for seven days. **Log out** clears it.
-- Every non-auth API route checks the admin session and returns `401` with “Admin access required. Sign in with an admin account.” when it is missing or invalid.
+- Sessions are stored in a signed, HTTP-only `pc_session` cookie for seven days and include the account role. **Log out** clears it.
 
-> Registration is open: anyone who completes `/register` becomes an admin. Before exposing the app publicly, restrict access to `/register` (for example with a deployment-level password or invite code) if the admin group should be limited.
+> Registration is open: anyone who completes `/register` can create an admin or player account. Before exposing the app publicly, restrict access to `/register` (for example with a deployment-level password or invite code).
+
+### Player access
+
+- Players see the board they already joined. Before joining, they see the most recently active admin board, preferring an active scheduled rotation, then the latest saved match, then the latest roster.
+- Players can view the live rotation, court lineups, roster, leaderboard, and recent results.
+- Players cannot create, edit, delete, reset, score, change lineups, or add players. Those controls are removed from the player interface, and admin API routes reject player sessions.
+- **Join game** is the only player write action. It uses the account's registered alias and rate, links a same-name roster entry when one exists, or creates a new player entry. Join is idempotent and places the player in the pool for the next balanced rotation.
+- If no admin board exists yet, the player sees an empty waiting state and Join stays disabled until an admin starts a board.
 
 ### Per-admin game isolation
 
 - Each player and match stores the `_id` of the admin account that created it.
-- Every API query — roster, live state, lineups, scores, reset, clear, and sample data — filters by the signed-in admin's id.
+- Every admin API query — roster, live state, lineups, scores, reset, clear, and sample data — filters by the signed-in admin's id.
 - Auto-advancing the queue is also scoped per admin, so two admins can run games at the same time without interfering.
 - Admins cannot view, score, edit, reset, or delete another admin's games. Using another admin's player or match id returns “not found.”
-- The previous public guest board and login QR code have been removed. The app is admin-only.
+- The previous public guest board and login QR code have been removed. Access requires an Admin or Player account.
 - Players and matches created before owner scoping are assigned to the earliest admin account on the next server start or sign-in. Later admins always start with an empty board.
 
 ## API overview
 
 | Route | Purpose |
 | --- | --- |
-| `POST /api/auth/register` | Create an admin account with `alias`, `password`, and `admin: true`; signs the admin in |
-| `POST /api/auth/login` | Sign in with `alias` and `password`; returns `401` for invalid credentials |
-| `POST /api/auth/logout` | Clear the admin session cookie |
-| `GET /api/state` | Admin only. The signed-in admin's board state: players, active round, recent results, Top 5; also builds their next rotation automatically when the previous round is complete |
+| `POST /api/auth/register` | Create an account with `alias`, `password`, and `role: "admin"` or `role: "player"`; players also send `rating` and `gender`; signs the account in |
+| `POST /api/auth/login` | Sign in with `alias` and `password`; returns the account role and `401` for invalid credentials |
+| `POST /api/auth/logout` | Clear the session cookie |
+| `GET /api/state` | Role-aware. Admins get their own board and automatic next rotation; players get their joined board or the latest active admin board, plus Join availability |
+| `POST /api/player/join` | Player only. Join the current game using the account's registered alias and rate; links or creates the roster entry and is idempotent |
 | `GET /api/players` | Admin only. The signed-in admin's roster |
 | `POST /api/players` | Admin only. Add a rated player to the signed-in admin's roster |
 | `PATCH /api/players/:id` | Admin only. Update one of the admin's players |

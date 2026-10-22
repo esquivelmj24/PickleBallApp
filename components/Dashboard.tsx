@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { genderLabel } from "@/lib/constants";
 import { courtDisplayName } from "@/lib/courts";
 import type { AppState, CourtLayout, Match, MatchMode, Player } from "@/lib/types";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -14,6 +15,7 @@ import {
   AlertIcon,
   ArrowUpRightIcon,
   CheckIcon,
+  LockIcon,
   LogoBall,
   PlusIcon,
   SparklesIcon,
@@ -40,7 +42,8 @@ async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   return payload;
 }
 
-export function Dashboard({ alias }: { alias: string }) {
+export function Dashboard({ alias, role }: { alias: string; role: "admin" | "player" }) {
+  const isAdmin = role === "admin";
   const [state, setState] = useState<AppState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -51,6 +54,7 @@ export function Dashboard({ alias }: { alias: string }) {
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
+  const [joining, setJoining] = useState(false);
 
   const loadState = useCallback(async (initial = false) => {
     if (initial) setLoading(true);
@@ -227,6 +231,27 @@ export function Dashboard({ alias }: { alias: string }) {
     }
   }
 
+  async function handleJoin() {
+    if (!state?.viewer.canJoin) return;
+    setJoining(true);
+    try {
+      const result = await apiRequest<{
+        alreadyJoined: boolean;
+        player: { name: string; rating: number };
+      }>("/api/player/join", { method: "POST" });
+      await loadState();
+      showToast(
+        result.alreadyJoined
+          ? "You are already on this game board."
+          : `You joined as ${result.player.name} at rate ${result.player.rating.toFixed(1)}. Matchmaking will balance from your registered rate.`,
+      );
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not join the game.", "error");
+    } finally {
+      setJoining(false);
+    }
+  }
+
   const occupiedByCourt = useMemo(() => {
     const occupied = new Map<string, number>();
     if (!lineupMatch || !state?.activeRound) return occupied;
@@ -290,7 +315,7 @@ export function Dashboard({ alias }: { alias: string }) {
           <span className="brand-ball"><LogoBall size={38} /></span>
           <span className="brand-copy">
             <strong>PICKLE &amp; CHILL</strong>
-            <small>Committee console</small>
+            <small>{isAdmin ? "Committee console" : "Player console"}</small>
           </span>
         </a>
 
@@ -306,9 +331,13 @@ export function Dashboard({ alias }: { alias: string }) {
             Court desk live
           </span>
           <ThemeSwitcher compact />
-          <span className="admin-chip" title="Signed in as admin">
+          <span
+            className={`admin-chip ${isAdmin ? "" : "is-player"}`}
+            title={isAdmin ? "Signed in as admin" : "Signed in as player"}
+          >
             <span className="admin-dot" />
             {alias}
+            <span className="role-label">{isAdmin ? "Admin" : "Player"}</span>
           </span>
           <button type="button" className="btn btn-ghost btn-small" onClick={() => void handleLogout()}>
             Log out
@@ -321,7 +350,7 @@ export function Dashboard({ alias }: { alias: string }) {
           <div className="hero-copy">
             <div className="eyebrow hero-eyebrow">
               <span className="eyebrow-ball"><LogoBall size={17} /></span>
-              Pickleball club · Leveling committee
+              {isAdmin ? "Pickleball club · Leveling committee" : "Pickleball club · Player view"}
             </div>
             <h1>
               Balanced courts.
@@ -329,25 +358,54 @@ export function Dashboard({ alias }: { alias: string }) {
               <span>Better games.</span>
             </h1>
             <p className="hero-lede">
-              Rate every player, build level-matched or Open Rate courts, and keep the leaderboard
-              honest. Everyone gets a game before anyone gets a repeat.
+              {isAdmin
+                ? "Rate every player, build level-matched or Open Rate courts, and keep the leaderboard honest. Everyone gets a game before anyone gets a repeat."
+                : "Follow the live rotation, review the roster, and join the game when you are ready. Your registered rate is used automatically for balanced courts."}
             </p>
             <div className="hero-actions">
-              <button
-                type="button"
-                className="btn btn-primary btn-large"
-                onClick={() => {
-                  if (stats.totalPlayers < 4) {
-                    setPlayerModal({ mode: "add" });
-                  } else {
-                    document.getElementById("rotation")?.scrollIntoView({ behavior: "smooth" });
+              {isAdmin ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-large"
+                  onClick={() => {
+                    if (stats.totalPlayers < 4) {
+                      setPlayerModal({ mode: "add" });
+                    } else {
+                      document.getElementById("rotation")?.scrollIntoView({ behavior: "smooth" });
+                    }
+                  }}
+                >
+                  {stats.totalPlayers < 4 ? <PlusIcon size={18} /> : <SparklesIcon size={18} />}
+                  {stats.totalPlayers < 4 ? "Build your roster" : "Go to rotation"}
+                  <ArrowUpRightIcon size={17} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-large"
+                  onClick={() => void handleJoin()}
+                  disabled={joining || state.viewer.joined || !state.viewer.canJoin}
+                  title={
+                    state.viewer.joined
+                      ? "You are already on this game board."
+                      : state.viewer.canJoin
+                        ? "Join the player pool with your registered alias and rate."
+                        : state.viewer.message
                   }
-                }}
-              >
-                {stats.totalPlayers < 4 ? <PlusIcon size={18} /> : <SparklesIcon size={18} />}
-                {stats.totalPlayers < 4 ? "Build your roster" : "Go to rotation"}
-                <ArrowUpRightIcon size={17} />
-              </button>
+                >
+                  {state.viewer.joined ? <CheckIcon size={18} /> : <PlusIcon size={18} />}
+                  {state.viewer.joined
+                    ? "You're in the game"
+                    : joining
+                      ? "Joining…"
+                      : state.viewer.canJoin
+                        ? "Join game"
+                        : "Join unavailable"}
+                  {state.viewer.canJoin && !state.viewer.joined ? (
+                    <ArrowUpRightIcon size={17} />
+                  ) : null}
+                </button>
+              )}
             </div>
             <div className="hero-proof">
               <span><CheckIcon size={14} /> No player on two active courts</span>
@@ -430,6 +488,42 @@ export function Dashboard({ alias }: { alias: string }) {
           </div>
         </div>
 
+        {!isAdmin ? (
+          <section
+            className={`player-banner ${state.viewer.joined ? "is-joined" : ""}`}
+            aria-label="Player access"
+          >
+            <div className="player-banner-copy">
+              <span className="eyebrow">Player access</span>
+              <strong>
+                {state.viewer.joined
+                  ? "You are on this game board"
+                  : state.viewer.canJoin
+                    ? "Ready to join the game?"
+                    : "Waiting for an open game"}
+              </strong>
+              <span>{state.viewer.message}</span>
+              <div className="player-banner-meta">
+                <span>Registered rate {state.viewer.rating?.toFixed(1) ?? "—"}</span>
+                {state.viewer.gender ? <span>{genderLabel(state.viewer.gender)}</span> : null}
+                {state.viewer.boardOwnerAlias ? (
+                  <span>Board host: {state.viewer.boardOwnerAlias}</span>
+                ) : null}
+              </div>
+            </div>
+            <div className="player-banner-actions">
+              <span className="view-only-chip">
+                <LockIcon size={13} />
+                View-only board
+              </span>
+              <span className={`player-status ${state.viewer.joined ? "is-joined" : ""}`}>
+                {state.viewer.joined ? <CheckIcon size={14} /> : <UsersIcon size={14} />}
+                {state.viewer.joined ? "Joined" : state.viewer.canJoin ? "Join is open" : "Not open yet"}
+              </span>
+            </div>
+          </section>
+        ) : null}
+
         <div className="content-grid">
           <div className="main-column">
             <MatchBoard
@@ -441,6 +535,7 @@ export function Dashboard({ alias }: { alias: string }) {
               onEditLineup={setLineupMatch}
               onAddPlayer={() => setPlayerModal({ mode: "add" })}
               onReset={() => setResetGameOpen(true)}
+              readOnly={!isAdmin}
             />
 
             <PlayerRoster
@@ -458,6 +553,8 @@ export function Dashboard({ alias }: { alias: string }) {
               }
               onLoadSample={handleLoadSample}
               sampleLoading={sampleLoading}
+              readOnly={!isAdmin}
+              viewerPlayerId={state.viewer.playerId}
             />
           </div>
 
@@ -481,7 +578,7 @@ export function Dashboard({ alias }: { alias: string }) {
         </footer>
       </main>
 
-      {playerModal ? (
+      {isAdmin && playerModal ? (
         <PlayerModal
           mode={playerModal.mode}
           player={playerModal.mode === "edit" ? playerModal.player : undefined}
@@ -490,7 +587,7 @@ export function Dashboard({ alias }: { alias: string }) {
         />
       ) : null}
 
-      {lineupMatch ? (
+      {isAdmin && lineupMatch ? (
         <LineupModal
           match={lineupMatch}
           players={state.players}
@@ -501,7 +598,7 @@ export function Dashboard({ alias }: { alias: string }) {
         />
       ) : null}
 
-      {deletePlayer ? (
+      {isAdmin && deletePlayer ? (
         <ConfirmDialog
           title={`Remove ${deletePlayer.name}?`}
           message="They will leave the active roster and stop appearing in match rotations. Completed match history keeps its player snapshots."
@@ -511,7 +608,7 @@ export function Dashboard({ alias }: { alias: string }) {
         />
       ) : null}
 
-      {resetGameOpen ? (
+      {isAdmin && resetGameOpen ? (
         <ConfirmDialog
           title="Reset the game?"
           message="This clears the current rotation, all saved matches, and the session W/L totals for every player. The roster and ratings are kept. You will return to setup to start a new game."
@@ -524,7 +621,7 @@ export function Dashboard({ alias }: { alias: string }) {
         />
       ) : null}
 
-      {clearAllOpen ? (
+      {isAdmin && clearAllOpen ? (
         <ConfirmDialog
           title="Clear the entire board?"
           message={`This permanently removes ${
