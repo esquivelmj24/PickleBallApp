@@ -89,7 +89,13 @@ export async function POST(request: Request) {
       }
     }
 
-    const round = buildRound(players, lineupCount, mode, priorityOrder);
+    // Completed matches teach the shuffle which partnerships and opponent
+    // pairings have already happened, so the next round rotates away from them.
+    const history = await matchesCollection
+      .find({ ownerId, status: "completed" })
+      .toArray();
+
+    const round = buildRound(players, lineupCount, mode, priorityOrder, history);
 
     if (round.pairings.length === 0) {
       return jsonError(

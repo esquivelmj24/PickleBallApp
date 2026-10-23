@@ -84,7 +84,10 @@ export async function POST() {
     const priorityOrder = singleCourtRound
       ? null
       : finishOrderPriority(roundMatches);
-    const round = buildRound(available, 1, mode, priorityOrder);
+    // Include results already saved in this session so the added court does
+    // not immediately repeat partnerships or opponent pairings from earlier.
+    const history = await matches.find({ ownerId, status: "completed" }).toArray();
+    const round = buildRound(available, 1, mode, priorityOrder, history);
     if (round.pairings.length === 0) {
       return jsonError(
         mode === "level"

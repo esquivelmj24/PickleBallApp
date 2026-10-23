@@ -81,7 +81,8 @@ async function advanceRoundIfCompleteUnlocked(
   // finished still get finish-order preference, but only inside the same
   // games-played group so late arrivals can catch up.
   const priorityOrder = layout === "single" ? null : finishOrderPriority(roundMatches);
-  const round = buildRound(players, lineupCount, mode, priorityOrder);
+  const history = await matches.find({ ownerId, status: "completed" }).toArray();
+  const round = buildRound(players, lineupCount, mode, priorityOrder, history);
   if (round.pairings.length === 0) {
     return { advanced: false, reason: "no-pairings" };
   }

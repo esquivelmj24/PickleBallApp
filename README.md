@@ -31,6 +31,7 @@ Built with **Next.js 15 (App Router)**, **TypeScript**, and **MongoDB**.
 - **Add next lineup** — in Single court, queues another **Next Player** group below the active Court. In Multiple courts, adds another physical court up to **6 courts**. The queued group stays locked until the active court result is saved. Players on completed courts become available again, while players on active or queued courts stay locked.
 - **Live court board** — courts stack vertically, one court per row. In Single court the active **Court** is on top and the **Next Player** group sits below it until the result is saved.
 - **Catch-up priority** — players with the fewest completed games are selected first, so a late arrival with `0 played` gets priority for the next suitable game and can catch up to the rest of the roster. Within the same play count, players who finished their previous match earlier are ranked first, then the longest rest.
+- **Partner and opponent rotation** — completed match history is used to avoid repeating the same opponents, rotate former teammates into opposing teams, and keep pairings moving so every player eventually plays with and against every other player.
 - **Available next list** — shows every player who can fill the next court or Next Player group, including players whose earlier court is already complete. The list is ordered by fewest games first, then finish order and longest rest.
 - **Manual lineup override** — the committee can change any player on an active court with an available roster player. Manual changes are not restricted by rating band, and a court that spans bands is labeled **Mixed levels**.
 - **Win/loss result labels** — completed lineups show **Win** and **Loss** tags on the teams, plus a `Team A won` / `Team B lost` result beside the score.
@@ -131,6 +132,16 @@ If no rating band has four available players, use **Reset** and start a new sess
 6. Each foursome is still split into the most evenly rated teams possible.
 7. Courts are labeled **Open rate** on the board.
 8. When every court in the rotation has a result, the next Open rate rotation is built automatically.
+
+#### Partnership and opponent rotation
+
+Both modes use every completed game as rotation history:
+
+1. Players who have not met recently are grouped together first.
+2. Repeated opponents are moved onto the same team when possible, so the same matchup is not repeated.
+3. Former teammates are moved onto opposite teams when possible, giving them a chance to compete against each other.
+4. Pairings keep rotating, so over a series of games every player gets the opportunity to partner with and compete against every other player.
+5. Fair play counts, rest, finish order, rating bands, and balanced teams still apply; history only chooses between otherwise valid groups and team splits.
 
 #### Starting, continuing, and resetting
 
