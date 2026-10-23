@@ -20,6 +20,7 @@ export type RosterFormValues = {
 type RosterModalProps = {
   mode?: "create" | "edit";
   initialValues?: RosterFormValues;
+  minCapacity?: number;
   onClose: () => void;
   onSubmit: (payload: RosterFormValues) => Promise<void>;
 };
@@ -33,10 +34,14 @@ function todayValue(): string {
 export function RosterModal({
   mode = "create",
   initialValues,
+  minCapacity = 0,
   onClose,
   onSubmit,
 }: RosterModalProps) {
   const isEdit = mode === "edit";
+  const capacityMin = isEdit
+    ? Math.max(ROSTER_CAPACITY_MIN, minCapacity)
+    : ROSTER_CAPACITY_MIN;
   const [name, setName] = useState(initialValues?.name ?? "");
   const [location, setLocation] = useState(initialValues?.location ?? "");
   const [date, setDate] = useState(initialValues?.date ?? todayValue);
@@ -109,6 +114,14 @@ export function RosterModal({
       );
       return;
     }
+    if (parsedCapacity < capacityMin) {
+      setError(
+        `Capacity cannot be lower than the ${capacityMin} player${
+          capacityMin === 1 ? "" : "s"
+        } already joined.`,
+      );
+      return;
+    }
 
     setSaving(true);
     try {
@@ -164,7 +177,7 @@ export function RosterModal({
 
         <p className="modal-intro">
           {isEdit
-            ? "Update the roster name, location, date, and times. Players will see the changes immediately."
+            ? "Update the roster name, location, date, times, and player capacity. Players will see the changes immediately."
             : "Set the date, location, start and end times, and number of player slots. Players will see the roster on their page and can reserve a spot until it is full or you end the transaction."}
         </p>
 
@@ -229,29 +242,26 @@ export function RosterModal({
             </div>
           </div>
 
-          {isEdit ? (
-            <span className="field-hint">
-              The existing player capacity of {capacity} stays unchanged.
-            </span>
-          ) : (
-            <div className="field-group">
-              <label htmlFor="roster-capacity">Number of players</label>
-              <div className="capacity-manual-row">
-                <input
-                  id="roster-capacity"
-                  className="text-input capacity-input"
-                  type="number"
-                  inputMode="numeric"
-                  min={ROSTER_CAPACITY_MIN}
-                  max={ROSTER_CAPACITY_MAX}
-                  step={1}
-                  value={capacity}
-                  onChange={(event) => setCapacity(event.target.value)}
-                />
-                <span className="capacity-unit">players max</span>
-              </div>
-              <div className="capacity-presets" aria-label="Quick capacity presets">
-                {ROSTER_CAPACITIES.map((option) => (
+          <div className="field-group">
+            <label htmlFor="roster-capacity">Number of players</label>
+            <div className="capacity-manual-row">
+              <input
+                id="roster-capacity"
+                className="text-input capacity-input"
+                type="number"
+                inputMode="numeric"
+                min={capacityMin}
+                max={ROSTER_CAPACITY_MAX}
+                step={1}
+                value={capacity}
+                onChange={(event) => setCapacity(event.target.value)}
+              />
+              <span className="capacity-unit">players max</span>
+            </div>
+            <div className="capacity-presets" aria-label="Quick capacity presets">
+              {ROSTER_CAPACITIES.map((option) => {
+                const unavailable = option < capacityMin;
+                return (
                   <button
                     key={option}
                     type="button"
@@ -260,17 +270,26 @@ export function RosterModal({
                     }`}
                     aria-pressed={Number(capacity) === option}
                     onClick={() => setCapacity(String(option))}
+                    disabled={unavailable}
+                    title={
+                      unavailable
+                        ? `Capacity cannot be lower than ${capacityMin} joined players.`
+                        : undefined
+                    }
                   >
                     {option}
                   </button>
-                ))}
-              </div>
-              <span className="field-hint">
-                Enter any number from {ROSTER_CAPACITY_MIN} to {ROSTER_CAPACITY_MAX}, or choose a
-                quick preset. The roster shows a ratio such as 1/{capacity || "N"}.
-              </span>
+                );
+              })}
             </div>
-          )}
+            <span className="field-hint">
+              Enter any number from {capacityMin} to {ROSTER_CAPACITY_MAX}, or choose a quick
+              preset. The roster shows a ratio such as 1/{capacity || "N"}.
+              {isEdit && capacityMin > ROSTER_CAPACITY_MIN
+                ? ` Capacity cannot be lower than the ${capacityMin} players already joined.`
+                : ""}
+            </span>
+          </div>
 
           {error ? (
             <div className="form-error" role="alert">

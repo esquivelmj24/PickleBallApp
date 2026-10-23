@@ -233,7 +233,7 @@ export function RosterDetail({
             <p>
               {roster.ended
                 ? "This transaction has ended and has been removed from the roster list."
-                : "Edit the roster name, location, date, or times. The game board and Players & ratings sections are available below. End the transaction when the roster should stop accepting players."}
+                : "Edit the roster name, location, date, times, or player capacity. The game board and Players & ratings sections are available below. End the transaction when the roster should stop accepting players."}
             </p>
           </div>
           {roster.ended ? (

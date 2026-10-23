@@ -184,27 +184,24 @@ export function Dashboard({
   }
 
   async function handleClearAll() {
-    const result = await apiRequest<{ players: number; matches: number; rosters: number }>(
-      "/api/reset",
-      {
-        method: "DELETE",
-        body: JSON.stringify({ confirm: "CLEAR ALL" }),
-      },
-    );
+    const result = await apiRequest<{
+      players: number;
+      matches: number;
+      rosterEntries: number;
+      rosters: number;
+    }>("/api/reset", {
+      method: "DELETE",
+      body: JSON.stringify({ confirm: "CLEAR ALL" }),
+    });
     setClearAllOpen(false);
     await loadState();
     showToast(
       `Board cleared. ${result.players} player${result.players === 1 ? "" : "s"}, ${
         result.matches
-      } match${result.matches === 1 ? "" : "es"}, and ${result.rosters} roster${
-        result.rosters === 1 ? "" : "s"
-      } removed.`,
+      } match${result.matches === 1 ? "" : "es"}, and ${result.rosterEntries} roster membership${
+        result.rosterEntries === 1 ? "" : "s"
+      } removed. ${result.rosters} scheduled roster${result.rosters === 1 ? "" : "s"} kept.`,
     );
-    if (isRosterView) {
-      window.setTimeout(() => {
-        window.location.href = "/#rosters";
-      }, 650);
-    }
   }
 
   async function handleLogout() {
@@ -328,6 +325,7 @@ export function Dashboard({
         date: payload.date,
         startTime: payload.startTime,
         endTime: payload.endTime,
+        capacity: payload.capacity,
       }),
     });
     setEditRosterOpen(false);
@@ -738,10 +736,10 @@ export function Dashboard({
 
       {isAdmin && clearAllOpen ? (
         <ConfirmDialog
-          title="Clear the entire board?"
+          title="Clear all players and matches?"
           message={`This permanently removes ${
             state.players.length > 0 ? `all ${state.players.length} players, ` : ""
-          }every saved match, all game rosters, and the Top 5 leaderboard. This cannot be undone.`}
+          }every saved match, all roster memberships, and the Top 5 leaderboard. Scheduled rosters are kept with 0 joined. This cannot be undone.`}
           confirmLabel="Clear all data"
           cancelLabel="Cancel"
           workingLabel="Clearing…"
@@ -781,6 +779,7 @@ export function Dashboard({
             endTime: activeRoster.endTime,
             capacity: activeRoster.capacity,
           }}
+          minCapacity={activeRoster.joinedCount}
           onClose={() => setEditRosterOpen(false)}
           onSubmit={handleUpdateRoster}
         />

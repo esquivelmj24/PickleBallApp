@@ -5876,9 +5876,14 @@ a {
   transition: 160ms ease;
 }
 
-.capacity-chip:hover {
+.capacity-chip:hover:not(:disabled) {
   background: var(--paper);
   border-color: var(--line-strong);
+}
+
+.capacity-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
 }
 
 .capacity-chip.is-selected {

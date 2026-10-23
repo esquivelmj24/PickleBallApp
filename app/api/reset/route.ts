@@ -20,19 +20,26 @@ export async function DELETE(request: Request) {
     }
 
     const db = await getDb();
-    const [players, matches, rosters, rosterEntries] = await Promise.all([
+    const [players, matches, rosterEntries] = await Promise.all([
       db.collection("players").deleteMany({ ownerId }),
       db.collection("matches").deleteMany({ ownerId }),
-      db.collection("rosters").deleteMany({ ownerId }),
       db.collection("rosterEntries").deleteMany({ ownerId }),
     ]);
+
+    const now = new Date();
+    await db
+      .collection("rosters")
+      .updateMany({ ownerId }, { $set: { joinedCount: 0, updatedAt: now } });
+    const activeRosters = await db
+      .collection("rosters")
+      .countDocuments({ ownerId, endedAt: null });
 
     return NextResponse.json({
       ok: true,
       players: players.deletedCount,
       matches: matches.deletedCount,
-      rosters: rosters.deletedCount,
       rosterEntries: rosterEntries.deletedCount,
+      rosters: activeRosters,
     });
   } catch (error) {
     console.error("DELETE /api/reset failed", error);

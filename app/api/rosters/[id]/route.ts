@@ -4,11 +4,13 @@ import { jsonError, readBody } from "@/lib/api";
 import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
 import { getDb, type RosterDoc } from "@/lib/db";
 import {
+  normalizeRosterCapacity,
   validateRosterDate,
   validateRosterLocation,
   validateRosterName,
   validateRosterTime,
 } from "@/lib/rosters";
+import { ROSTER_CAPACITY_MAX, ROSTER_CAPACITY_MIN } from "@/lib/roster-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,6 +31,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const scheduledDate = validateRosterDate(body.date);
     const scheduledTime = validateRosterTime(body.startTime);
     const scheduledEndTime = validateRosterTime(body.endTime);
+    const capacity = normalizeRosterCapacity(body.capacity);
 
     if (!name) {
       return jsonError("Roster name must be 2–60 characters and include a letter or number.");
@@ -48,13 +51,41 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (scheduledEndTime <= scheduledTime) {
       return jsonError("End time must be later than the start time.");
     }
+    if (!capacity) {
+      return jsonError(
+        `Player capacity must be a whole number from ${ROSTER_CAPACITY_MIN} to ${ROSTER_CAPACITY_MAX}.`,
+      );
+    }
 
     const db = await getDb();
+    const rosterId = new ObjectId(id);
+    const ownerId = ownerObjectId(admin);
+    const existing = await db.collection<RosterDoc>("rosters").findOne({
+      _id: rosterId,
+      ownerId,
+      endedAt: null,
+    });
+
+    if (!existing) {
+      return jsonError("That roster no longer exists or has ended.", 404);
+    }
+
+    const joinedCount = existing.joinedCount ?? 0;
+    if (capacity < joinedCount) {
+      return jsonError(
+        `Capacity cannot be lower than the ${joinedCount} player${
+          joinedCount === 1 ? "" : "s"
+        } already joined.`,
+        409,
+      );
+    }
+
     const roster = await db.collection<RosterDoc>("rosters").findOneAndUpdate(
       {
-        _id: new ObjectId(id),
-        ownerId: ownerObjectId(admin),
+        _id: rosterId,
+        ownerId,
         endedAt: null,
+        $expr: { $lte: [{ $ifNull: ["$joinedCount", 0] }, capacity] },
       },
       {
         $set: {
@@ -63,6 +94,7 @@ export async function PATCH(request: Request, context: RouteContext) {
           scheduledDate,
           scheduledTime,
           scheduledEndTime,
+          capacity,
           updatedAt: new Date(),
         },
       },
@@ -70,7 +102,10 @@ export async function PATCH(request: Request, context: RouteContext) {
     );
 
     if (!roster) {
-      return jsonError("That roster no longer exists or has ended.", 404);
+      return jsonError(
+        "That roster changed while you were editing it. Refresh and try again.",
+        409,
+      );
     }
 
     return NextResponse.json({
@@ -81,6 +116,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       date: roster.scheduledDate,
       startTime: roster.scheduledTime,
       endTime: roster.scheduledEndTime ?? scheduledEndTime,
+      capacity: roster.capacity,
     });
   } catch (error) {
     console.error("PATCH /api/rosters/[id] failed", error);
