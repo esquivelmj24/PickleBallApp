@@ -3,17 +3,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { genderLabel } from "@/lib/constants";
 import { courtDisplayName } from "@/lib/courts";
-import type { AppState, CourtLayout, Match, MatchMode, Player } from "@/lib/types";
+import type { AppState, CourtLayout, Match, MatchMode, Player, Roster } from "@/lib/types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { LineupModal } from "./LineupModal";
 import { MatchBoard } from "./MatchBoard";
 import { PlayerModal } from "./PlayerModal";
 import { PlayerRoster } from "./PlayerRoster";
+import { RosterModal, type RosterFormValues } from "./RosterModal";
+import { RosterPanel } from "./RosterPanel";
 import { LevelGuide, RecentResults, TopFive } from "./SidePanels";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
   AlertIcon,
   ArrowUpRightIcon,
+  CalendarIcon,
   CheckIcon,
   LockIcon,
   LogoBall,
@@ -54,7 +57,8 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
   const [clearAllOpen, setClearAllOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
-  const [joining, setJoining] = useState(false);
+  const [rosterModalOpen, setRosterModalOpen] = useState(false);
+  const [joiningRosterId, setJoiningRosterId] = useState<string | null>(null);
 
   const loadState = useCallback(async (initial = false) => {
     if (initial) setLoading(true);
@@ -73,6 +77,39 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
   useEffect(() => {
     void loadState(true);
   }, [loadState]);
+
+  // Keep joined/capacity ratios in sync for everyone viewing the page. Polling
+  // only the roster summaries keeps this light while the full board stays put.
+  useEffect(() => {
+    let active = true;
+
+    async function refreshRosters() {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const rosters = await apiRequest<Roster[]>("/api/rosters", { cache: "no-store" });
+        if (!active) return;
+        setState((current) => (current ? { ...current, rosters } : current));
+      } catch {
+        // A background refresh failure should not interrupt the current board.
+      }
+    }
+
+    const timer = window.setInterval(() => void refreshRosters(), 15_000);
+    const onFocus = () => void refreshRosters();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refreshRosters();
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     if (!toast) return;
@@ -123,16 +160,21 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
   }
 
   async function handleClearAll() {
-    const result = await apiRequest<{ players: number; matches: number }>("/api/reset", {
-      method: "DELETE",
-      body: JSON.stringify({ confirm: "CLEAR ALL" }),
-    });
+    const result = await apiRequest<{ players: number; matches: number; rosters: number }>(
+      "/api/reset",
+      {
+        method: "DELETE",
+        body: JSON.stringify({ confirm: "CLEAR ALL" }),
+      },
+    );
     setClearAllOpen(false);
     await loadState();
     showToast(
-      `Board cleared. ${result.players} player${result.players === 1 ? "" : "s"} and ${
+      `Board cleared. ${result.players} player${result.players === 1 ? "" : "s"}, ${
         result.matches
-      } match${result.matches === 1 ? "" : "es"} removed.`,
+      } match${result.matches === 1 ? "" : "es"}, and ${result.rosters} roster${
+        result.rosters === 1 ? "" : "s"
+      } removed.`,
     );
   }
 
@@ -231,24 +273,39 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
     }
   }
 
-  async function handleJoin() {
-    if (!state?.viewer.canJoin) return;
-    setJoining(true);
+  async function handleCreateRoster(payload: RosterFormValues) {
+    const created = await apiRequest<Roster>("/api/rosters", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    setRosterModalOpen(false);
+    await loadState();
+    showToast(
+      `${created.name} scheduled for ${created.date} · 0/${created.capacity} joined.`,
+    );
+    window.setTimeout(() => {
+      document.getElementById("rosters")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 80);
+  }
+
+  async function handleJoinRoster(roster: Roster) {
+    setJoiningRosterId(roster.id);
     try {
       const result = await apiRequest<{
         alreadyJoined: boolean;
-        player: { name: string; rating: number };
-      }>("/api/player/join", { method: "POST" });
+        joinedCount: number;
+        capacity: number;
+      }>(`/api/rosters/${roster.id}/join`, { method: "POST" });
       await loadState();
       showToast(
         result.alreadyJoined
-          ? "You are already on this game board."
-          : `You joined as ${result.player.name} at rate ${result.player.rating.toFixed(1)}. Matchmaking will balance from your registered rate.`,
+          ? `You already joined ${roster.name} · ${result.joinedCount}/${result.capacity} spots filled.`
+          : `You joined ${roster.name} · ${result.joinedCount}/${result.capacity} spots filled.`,
       );
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Could not join the game.", "error");
+      showToast(error instanceof Error ? error.message : "Could not join that roster.", "error");
     } finally {
-      setJoining(false);
+      setJoiningRosterId(null);
     }
   }
 
@@ -307,6 +364,7 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
   const { stats } = state;
   const playedPlayers = stats.totalPlayers - stats.playersYetToPlay;
   const playedPercent = stats.totalPlayers ? Math.round((playedPlayers / stats.totalPlayers) * 100) : 0;
+  const openRosterCount = state.rosters.filter((roster) => !roster.full).length;
 
   return (
     <div className="app-shell">
@@ -320,6 +378,7 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
         </a>
 
         <nav className="main-nav" aria-label="Main navigation">
+          <a href="#rosters">Rosters</a>
           <a href="#rotation">Live rotation</a>
           <a href="#players">Players</a>
           <a href="#top-five-title">Leaderboard</a>
@@ -359,8 +418,8 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
             </h1>
             <p className="hero-lede">
               {isAdmin
-                ? "Rate every player, build level-matched or Open Rate courts, and keep the leaderboard honest. Everyone gets a game before anyone gets a repeat."
-                : "Follow the live rotation, review the roster, and join the game when you are ready. Your registered rate is used automatically for balanced courts."}
+                ? "Rate every player, create scheduled game rosters, build level-matched or Open Rate courts, and keep the leaderboard honest. Everyone gets a game before anyone gets a repeat."
+                : "Browse the scheduled game rosters, reserve your spot, and follow the live rotation. Your registered rate is used automatically for balanced courts."}
             </p>
             <div className="hero-actions">
               {isAdmin ? (
@@ -383,27 +442,15 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
                 <button
                   type="button"
                   className="btn btn-primary btn-large"
-                  onClick={() => void handleJoin()}
-                  disabled={joining || state.viewer.joined || !state.viewer.canJoin}
-                  title={
-                    state.viewer.joined
-                      ? "You are already on this game board."
-                      : state.viewer.canJoin
-                        ? "Join the player pool with your registered alias and rate."
-                        : state.viewer.message
-                  }
+                  onClick={() => {
+                    document
+                      .getElementById("rosters")
+                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
                 >
-                  {state.viewer.joined ? <CheckIcon size={18} /> : <PlusIcon size={18} />}
-                  {state.viewer.joined
-                    ? "You're in the game"
-                    : joining
-                      ? "Joining…"
-                      : state.viewer.canJoin
-                        ? "Join game"
-                        : "Join unavailable"}
-                  {state.viewer.canJoin && !state.viewer.joined ? (
-                    <ArrowUpRightIcon size={17} />
-                  ) : null}
+                  <CalendarIcon size={18} />
+                  {openRosterCount > 0 ? "Choose a roster" : "View rosters"}
+                  <ArrowUpRightIcon size={17} />
                 </button>
               )}
             </div>
@@ -488,6 +535,14 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
           </div>
         </div>
 
+        <RosterPanel
+          rosters={state.rosters}
+          isAdmin={isAdmin}
+          onCreate={() => setRosterModalOpen(true)}
+          onJoin={handleJoinRoster}
+          joiningId={joiningRosterId}
+        />
+
         {!isAdmin ? (
           <section
             className={`player-banner ${state.viewer.joined ? "is-joined" : ""}`}
@@ -498,9 +553,9 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
               <strong>
                 {state.viewer.joined
                   ? "You are on this game board"
-                  : state.viewer.canJoin
-                    ? "Ready to join the game?"
-                    : "Waiting for an open game"}
+                  : openRosterCount > 0
+                    ? "Rosters are open"
+                    : "Waiting for an open roster"}
               </strong>
               <span>{state.viewer.message}</span>
               <div className="player-banner-meta">
@@ -508,6 +563,11 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
                 {state.viewer.gender ? <span>{genderLabel(state.viewer.gender)}</span> : null}
                 {state.viewer.boardOwnerAlias ? (
                   <span>Board host: {state.viewer.boardOwnerAlias}</span>
+                ) : null}
+                {openRosterCount > 0 ? (
+                  <span>
+                    {openRosterCount} roster{openRosterCount === 1 ? "" : "s"} with open slots
+                  </span>
                 ) : null}
               </div>
             </div>
@@ -518,7 +578,11 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
               </span>
               <span className={`player-status ${state.viewer.joined ? "is-joined" : ""}`}>
                 {state.viewer.joined ? <CheckIcon size={14} /> : <UsersIcon size={14} />}
-                {state.viewer.joined ? "Joined" : state.viewer.canJoin ? "Join is open" : "Not open yet"}
+                {state.viewer.joined
+                  ? "Joined"
+                  : openRosterCount > 0
+                    ? "Join a roster"
+                    : "No open slots"}
               </span>
             </div>
           </section>
@@ -626,13 +690,20 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
           title="Clear the entire board?"
           message={`This permanently removes ${
             state.players.length > 0 ? `all ${state.players.length} players, ` : ""
-          }every saved match, and the Top 5 leaderboard. This cannot be undone.`}
+          }every saved match, all game rosters, and the Top 5 leaderboard. This cannot be undone.`}
           confirmLabel="Clear all data"
           cancelLabel="Cancel"
           workingLabel="Clearing…"
           requirePhrase="CLEAR ALL"
           onClose={() => setClearAllOpen(false)}
           onConfirm={handleClearAll}
+        />
+      ) : null}
+
+      {isAdmin && rosterModalOpen ? (
+        <RosterModal
+          onClose={() => setRosterModalOpen(false)}
+          onSubmit={handleCreateRoster}
         />
       ) : null}
 

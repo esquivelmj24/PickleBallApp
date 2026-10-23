@@ -44,6 +44,20 @@ export type Match = {
   completedAt: string | null;
 };
 
+export type Roster = {
+  id: string;
+  name: string;
+  date: string;
+  time: string;
+  capacity: number;
+  joinedCount: number;
+  remaining: number;
+  full: boolean;
+  joined: boolean;
+  ownerAlias: string;
+  createdAt: string;
+};
+
 export type TierCount = {
   key: LevelKey;
   label: string;
@@ -65,6 +79,7 @@ export type Viewer = {
 export type AppState = {
   viewer: Viewer;
   players: Player[];
+  rosters: Roster[];
   activeRound: {
     roundId: string;
     mode: MatchMode;

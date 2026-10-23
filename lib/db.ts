@@ -38,16 +38,34 @@ export async function getDb(): Promise<Db> {
       // owner-scoped one. Missing indexes are safe to ignore.
       await db.collection("players").dropIndex("nameKey_1").catch(() => undefined);
 
+      // Players can now join scheduled rosters from more than one admin, so a
+      // player account is unique per admin board rather than globally unique.
+      await db.collection("players").dropIndex("userId_1").catch(() => undefined);
+
       await Promise.all([
         db.collection("players").createIndex({ ownerId: 1, nameKey: 1 }, { unique: true }),
         db.collection("players").createIndex({ ownerId: 1, name: 1 }),
-        db.collection("players").createIndex({ userId: 1 }, { unique: true, sparse: true }),
+        db.collection("players").createIndex(
+          { ownerId: 1, userId: 1 },
+          {
+            unique: true,
+            partialFilterExpression: { userId: { $exists: true } },
+          },
+        ),
         db.collection("users").createIndex({ aliasKey: 1 }, { unique: true }),
         db.collection("matches").createIndex({ ownerId: 1, createdAt: -1 }),
         db.collection("matches").createIndex({ ownerId: 1, status: 1, createdAt: -1 }),
         db.collection("matches").createIndex({ ownerId: 1, roundId: 1 }),
         db.collection("matches").createIndex({ ownerId: 1, "team1.playerId": 1 }),
         db.collection("matches").createIndex({ ownerId: 1, "team2.playerId": 1 }),
+        db.collection("rosters").createIndex({ ownerId: 1, scheduledDate: 1, scheduledTime: 1 }),
+        db.collection("rosters").createIndex({ scheduledDate: 1, scheduledTime: 1 }),
+        db.collection("rosterEntries").createIndex(
+          { rosterId: 1, userId: 1 },
+          { unique: true },
+        ),
+        db.collection("rosterEntries").createIndex({ ownerId: 1, userId: 1 }),
+        db.collection("rosterEntries").createIndex({ userId: 1, createdAt: -1 }),
       ]);
 
       // Boards created before per-admin isolation have no ownerId. Assign that
@@ -118,6 +136,34 @@ export type MatchDoc = {
   createdAt: Date;
   completedAt: Date | null;
   updatedAt: Date;
+};
+
+/**
+ * A scheduled game created by an admin. The joined count is the number of
+ * player accounts that selected and joined this roster; capacity is the
+ * advertised number of available slots.
+ */
+export type RosterDoc = {
+  _id: ObjectId;
+  ownerId: ObjectId;
+  name: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  capacity: number;
+  joinedCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type RosterEntryDoc = {
+  _id: ObjectId;
+  rosterId: ObjectId;
+  ownerId: ObjectId;
+  userId: ObjectId;
+  playerId: ObjectId;
+  name: string;
+  rating: number;
+  createdAt: Date;
 };
 
 /**

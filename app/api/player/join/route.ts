@@ -1,9 +1,10 @@
-import { MongoServerError, ObjectId } from "mongodb";
+import { ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
-import { jsonError, nameKey } from "@/lib/api";
+import { jsonError } from "@/lib/api";
 import { playerAccessRequiredResponse, requirePlayer } from "@/lib/auth";
-import { getDb, type PlayerDoc, type UserDoc } from "@/lib/db";
+import { getDb, type UserDoc } from "@/lib/db";
 import { latestGameOwnerId } from "@/lib/games";
+import { joinOwnerBoard } from "@/lib/player-pool";
 import { serializePlayer } from "@/lib/serializers";
 
 export const dynamic = "force-dynamic";
@@ -25,16 +26,6 @@ export async function POST() {
       );
     }
 
-    const players = db.collection<PlayerDoc>("players");
-    const existingAccountPlayer = await players.findOne({ userId });
-    if (existingAccountPlayer) {
-      return NextResponse.json({
-        ok: true,
-        alreadyJoined: true,
-        player: serializePlayer(existingAccountPlayer),
-      });
-    }
-
     const ownerId = await latestGameOwnerId(db);
     if (!ownerId) {
       return jsonError(
@@ -43,75 +34,16 @@ export async function POST() {
       );
     }
 
-    const now = new Date();
-    const key = nameKey(userDoc.alias);
-    const sameName = await players.findOne({ ownerId, nameKey: key });
-
-    if (sameName) {
-      if (sameName.userId && !sameName.userId.equals(userId)) {
-        return jsonError("That player name is already linked to another account.", 409);
-      }
-
-      const updated = await players.findOneAndUpdate(
-        { _id: sameName._id, ownerId },
-        {
-          $set: {
-            userId,
-            rating: userDoc.rating,
-            gender: userDoc.gender,
-            updatedAt: now,
-          },
-        },
-        { returnDocument: "after" },
-      );
-
-      if (!updated) return jsonError("Could not join the game. Try again.", 500);
-
+    try {
+      const result = await joinOwnerBoard(db, userDoc, ownerId);
       return NextResponse.json({
         ok: true,
-        alreadyJoined: false,
-        player: serializePlayer(updated),
+        alreadyJoined: result.alreadyJoined,
+        player: serializePlayer(result.player),
       });
-    }
-
-    const doc: Omit<PlayerDoc, "_id"> = {
-      ownerId,
-      userId,
-      name: userDoc.alias,
-      nameKey: key,
-      rating: userDoc.rating,
-      gender: userDoc.gender,
-      gamesPlayed: 0,
-      wins: 0,
-      losses: 0,
-      pointsFor: 0,
-      pointsAgainst: 0,
-      lastPlayedAt: null,
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    try {
-      const result = await players.insertOne(doc as PlayerDoc);
-      return NextResponse.json(
-        {
-          ok: true,
-          alreadyJoined: false,
-          player: serializePlayer({ ...doc, _id: result.insertedId }),
-        },
-        { status: 201 },
-      );
     } catch (error) {
-      if (error instanceof MongoServerError && error.code === 11000) {
-        const joined = await players.findOne({ userId });
-        const nameMatch = joined ?? (await players.findOne({ ownerId, nameKey: key }));
-        if (nameMatch) {
-          return NextResponse.json({
-            ok: true,
-            alreadyJoined: true,
-            player: serializePlayer(nameMatch),
-          });
-        }
+      if (error instanceof Error && error.message === "NAME_TAKEN") {
+        return jsonError("That player name is already linked to another account.", 409);
       }
       throw error;
     }

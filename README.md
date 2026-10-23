@@ -8,8 +8,10 @@ Built with **Next.js 15 (App Router)**, **TypeScript**, and **MongoDB**.
 
 - **Admin and player accounts** — choose **Admin user** or **Player user** during registration. Admins register with an alias and password. Players register with an alias, password, **Rate** (2.0–4.0), and **Gender**. Passwords are hashed with scrypt, and signed HTTP-only session cookies keep users signed in for seven days.
 - **Private admin boards** — every player, match, and reset is scoped to the signed-in admin, so each admin creates and manages only their own games.
-- **Player participation** — a signed-in player lands on the **Balanced Courts, Better Games** dashboard and sees the board they joined, or the most recently active admin board before joining. Players can review game and player details, but all setup, score, lineup, reset, and roster controls are hidden. The only write action is **Join game**.
-- **Rate-based Join** — Join is idempotent and always uses the player account's registered alias and rate. It links an existing same-name roster entry when possible, otherwise adds a new player, then makes that player available for the next balanced rotation.
+- **Player participation** — a signed-in player lands on the **Balanced Courts, Better Games** dashboard and sees the board they joined, plus every scheduled game roster. Players can review game and player details, but all setup, score, lineup, reset, and roster-management controls are hidden. The only write action is selecting and joining a scheduled roster.
+- **Scheduled game rosters** — admins create rosters with a date, time, roster name, and player capacity of 10, 20, 30, 40, 50, or 60. Each roster displays its name, date, time, and joined/capacity ratio (for example `1/10`), with a progress bar and remaining slot count.
+- **Player roster selection and Join** — players see all scheduled rosters, click one to select it, then press the **Join this roster** button inside the selected card. Joined and full states are shown, and the ratio refreshes automatically for everyone viewing the page.
+- **Rate-based Join** — joining a roster is idempotent and always uses the player account's registered alias and rate. It links an existing same-name board entry when possible, otherwise adds a new player, then reserves a roster slot with an atomic capacity check.
 - **Background themes** — choose **Classic**, **Dark**, **Gray**, or **Black & Yellow** from the theme selector. The choice is saved in the browser and applied on the login and dashboard screens.
 - **Committee-assigned ratings** — enter a player's name and set a rating from 2.0 to 4.0 with a slider, stepper, or exact number input.
 - **Rating bands** — the level is calculated automatically:
@@ -35,7 +37,7 @@ Built with **Next.js 15 (App Router)**, **TypeScript**, and **MongoDB**.
 - **Available next list** — shows every player who can fill the next court or Next Player group, including players whose earlier court is already complete. The list is ordered by fewest games first, then finish order and longest rest.
 - **Manual lineup override** — the committee can change any player on an active court with an available roster player. Manual changes are not restricted by rating band, and a court that spans bands is labeled **Mixed levels**.
 - **Win/loss result labels** — completed lineups show **Win** and **Loss** tags on the teams, plus a `Team A won` / `Team B lost` result beside the score.
-- **Clear all** — removes every player, match, and leaderboard entry so the board can start fresh. The action requires typing `CLEAR ALL` before it can run. Use **Reset** instead when you only want to restart the session and keep the roster.
+- **Clear all** — removes every player, match, scheduled roster, and leaderboard entry so the board can start fresh. The action requires typing `CLEAR ALL` before it can run. Use **Reset** instead when you only want to restart the session and keep the roster.
 - **Scorebook** — save and correct match scores. Player play counts, wins, losses, and point differential update automatically.
 - **Top 5 leaderboard** — ranked by wins, then point differential, then rating.
 - **Played count for every player** — visible in the roster with a comparison bar so the committee can spot frequent players.
@@ -50,7 +52,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). On first run, open [http://localhost:3000/register](http://localhost:3000/register) and create an **Admin user** account to start a board. Players can register from the same screen as **Player user** with their alias, password, rate, and gender. The dashboard is at `/` and requires a session. Each admin account has its own private board; player accounts see the board they joined or the most recently active admin board.
+Open [http://localhost:3000](http://localhost:3000). On first run, open [http://localhost:3000/register](http://localhost:3000/register) and create an **Admin user** account to start a board. Players can register from the same screen as **Player user** with their alias, password, rate, and gender. The dashboard is at `/` and requires a session. Each admin account has its own private board and scheduled rosters; player accounts can browse every scheduled roster and see the board they joined or the most recently active admin board.
 
 ### Environment variables
 
@@ -72,9 +74,11 @@ The app creates these collections automatically:
 
 - `players` — `ownerId` (admin account), optional `userId` for a linked player account, name, optional gender, rating, play counts, record, point totals
 - `matches` — `ownerId` (admin account), round id, court number, matchmaking mode, queue position, team snapshots, scores, status
+- `rosters` — `ownerId` (admin account), roster name, scheduled date (`YYYY-MM-DD`), scheduled time (`HH:MM`), capacity, and the atomic joined-slot counter
+- `rosterEntries` — one membership per roster and player account, including owner, linked board player, name, rating, and join timestamp
 - `users` — alias, normalized alias key, scrypt password hash, role (`admin` or `player`), optional player rate and gender, and timestamps
 
-Player names are unique per admin, not across the whole database. Indexes for owner-scoped player names, account alias uniqueness, sparse player-account links, and owner-scoped match lookups are created on first connection.
+Player names are unique per admin, not across the whole database. A player account can link to one board per admin, so the same account may join rosters hosted by more than one admin. Indexes for owner-scoped player names, per-admin player-account links, unique roster memberships, and owner-scoped match and roster lookups are created on first connection.
 
 To try the interface with a sample roster, use **Load sample roster** in the empty roster panel. It is only available while the roster is empty.
 
@@ -197,18 +201,19 @@ Until the first result is entered, the top five are ordered by committee rating.
 
 ### Player access
 
-- Players see the board they already joined. Before joining, they see the most recently active admin board, preferring an active scheduled rotation, then the latest saved match, then the latest roster.
-- Players can view the live rotation, court lineups, roster, leaderboard, and recent results.
-- Players cannot create, edit, delete, reset, score, change lineups, or add players. Those controls are removed from the player interface, and admin API routes reject player sessions.
-- **Join game** is the only player write action. It uses the account's registered alias and rate, links a same-name roster entry when one exists, or creates a new player entry. Join is idempotent and places the player in the pool for the next balanced rotation.
-- If no admin board exists yet, the player sees an empty waiting state and Join stays disabled until an admin starts a board.
+- Players see every scheduled game roster, whether or not they have joined one. The player page also shows the board they joined, or the most recently active admin board before joining.
+- Rosters display the name, date, time, host alias, joined/capacity ratio, progress bar, and remaining slots. The ratio is derived from roster memberships and refreshes automatically.
+- Players select a roster card to reveal its **Join this roster** button. They can view the live rotation, court lineups, roster, leaderboard, and recent results.
+- Players cannot create, edit, or delete rosters, players, matches, or scores. Those controls are removed from the player interface, and admin API routes reject player sessions.
+- **Join this roster** is the player write action. It uses the account's registered alias and rate, links a same-name board entry when one exists, creates a new player entry otherwise, and reserves one roster slot. Join is idempotent, and the capacity check is atomic so the final slot cannot be taken twice. Repeated joins return the current ratio instead of creating a duplicate membership.
+- If no admin board or roster exists yet, the player sees an empty waiting state until an admin schedules a game.
 
 ### Per-admin game isolation
 
-- Each player and match stores the `_id` of the admin account that created it.
-- Every admin API query — roster, live state, lineups, scores, reset, clear, and sample data — filters by the signed-in admin's id.
+- Each player, match, and scheduled roster stores the `_id` of the admin account that created it.
+- Every admin API query — players, matches, rosters, live state, lineups, scores, reset, clear, and sample data — filters by the signed-in admin's id.
 - Auto-advancing the queue is also scoped per admin, so two admins can run games at the same time without interfering.
-- Admins cannot view, score, edit, reset, or delete another admin's games. Using another admin's player or match id returns “not found.”
+- Admins cannot view, score, edit, reset, or delete another admin's games or rosters. Using another admin's player, match, or roster id returns “not found.”
 - The previous public guest board and login QR code have been removed. Access requires an Admin or Player account.
 - Players and matches created before owner scoping are assigned to the earliest admin account on the next server start or sign-in. Later admins always start with an empty board.
 
@@ -219,8 +224,11 @@ Until the first result is entered, the top five are ordered by committee rating.
 | `POST /api/auth/register` | Create an account with `alias`, `password`, and `role: "admin"` or `role: "player"`; players also send `rating` and `gender`; signs the account in |
 | `POST /api/auth/login` | Sign in with `alias` and `password`; returns the account role and `401` for invalid credentials |
 | `POST /api/auth/logout` | Clear the session cookie |
-| `GET /api/state` | Role-aware. Admins get their own board and automatic next rotation; players get their joined board or the latest active admin board, plus Join availability |
-| `POST /api/player/join` | Player only. Join the current game using the account's registered alias and rate; links or creates the roster entry and is idempotent |
+| `GET /api/state` | Role-aware. Admins get their own board, rosters, and automatic next rotation; players get their joined board or the latest active admin board, all scheduled rosters, and Join availability |
+| `GET /api/rosters` | Signed-in users. Admins get their own scheduled rosters; players get all scheduled rosters with joined counts and their own joined state |
+| `POST /api/rosters` | Admin only. Create a roster with `name`, `date` (`YYYY-MM-DD`), `time` (`HH:MM`), and `capacity` of 10, 20, 30, 40, 50, or 60 |
+| `POST /api/rosters/:id/join` | Player only. Select and join a scheduled roster. Reserves a slot atomically, links or creates the player's board entry, and is idempotent |
+| `POST /api/player/join` | Player only. Legacy direct board join using the account's registered alias and rate; links or creates the board entry and is idempotent |
 | `GET /api/players` | Admin only. The signed-in admin's roster |
 | `POST /api/players` | Admin only. Add a rated player to the signed-in admin's roster |
 | `PATCH /api/players/:id` | Admin only. Update one of the admin's players |
@@ -230,7 +238,7 @@ Until the first result is entered, the top five are ordered by committee rating.
 | `PATCH /api/matches/:id` | Admin only. Manually change an active scheduled lineup; returns `409` for a queued Next Player group |
 | `POST /api/matches/:id/score` | Admin only. Save or correct a result; automatically builds the next rotation when the last court is scored |
 | `DELETE /api/reset/session` | Admin only. Reset the game session: clear matches and session W/L totals, keep the roster and ratings (requires `confirm: "RESET"`) |
-| `DELETE /api/reset` | Admin only. Clear all of the admin's players and match history (requires `confirm: "CLEAR ALL"`) |
+| `DELETE /api/reset` | Admin only. Clear all of the admin's players, match history, rosters, and roster memberships (requires `confirm: "CLEAR ALL"`) |
 | `POST /api/demo` | Admin only. Add a sample roster when the admin's roster is empty |
 
 All owner-scoped routes operate only on the signed-in admin's `ownerId`; another admin's ids are treated as not found.

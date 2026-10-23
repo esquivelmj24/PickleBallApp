@@ -8,14 +8,20 @@ import {
 } from "@/lib/auth";
 import { getDb, type MatchDoc, type PlayerDoc, type UserDoc } from "@/lib/db";
 import { latestGameOwnerId } from "@/lib/games";
+import { loadRosterSummaries } from "@/lib/rosters";
 import { advanceRoundIfComplete } from "@/lib/rounds";
 import { levelCounts, rankPlayers, serializeMatch, serializePlayer } from "@/lib/serializers";
-import type { AppState, Viewer } from "@/lib/types";
+import type { AppState, Roster, Viewer } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-async function buildBoardState(db: Db, ownerId: ObjectId, viewer: Viewer): Promise<AppState> {
+async function buildBoardState(
+  db: Db,
+  ownerId: ObjectId,
+  viewer: Viewer,
+  rosters: Roster[],
+): Promise<AppState> {
   const playersCollection = db.collection<PlayerDoc>("players");
   const matchesCollection = db.collection<MatchDoc>("matches");
 
@@ -69,6 +75,7 @@ async function buildBoardState(db: Db, ownerId: ObjectId, viewer: Viewer): Promi
   return {
     viewer,
     players,
+    rosters,
     activeRound,
     recentMatches: recentDocs.map(serializeMatch),
     topPlayers: rankPlayers(players).slice(0, 5),
@@ -86,10 +93,11 @@ async function buildBoardState(db: Db, ownerId: ObjectId, viewer: Viewer): Promi
   };
 }
 
-function emptyBoardState(viewer: Viewer): AppState {
+function emptyBoardState(viewer: Viewer, rosters: Roster[]): AppState {
   return {
     viewer,
     players: [],
+    rosters,
     activeRound: null,
     recentMatches: [],
     topPlayers: [],
@@ -104,25 +112,39 @@ function emptyBoardState(viewer: Viewer): AppState {
   };
 }
 
-async function buildPlayerState(db: Db, user: SessionUser): Promise<AppState> {
+async function buildPlayerState(
+  db: Db,
+  user: SessionUser,
+  rosters: Roster[],
+): Promise<AppState> {
   const userId = new ObjectId(user.id);
   const [userDoc, playerDoc] = await Promise.all([
     db.collection<UserDoc>("users").findOne({ _id: userId }),
-    db.collection<PlayerDoc>("players").findOne({ userId }),
+    db
+      .collection<PlayerDoc>("players")
+      .find({ userId })
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .limit(1)
+      .next(),
   ]);
 
   const ownerId = playerDoc?.ownerId ?? (await latestGameOwnerId(db));
 
   if (!ownerId) {
-    return emptyBoardState({
-      role: "player",
-      alias: user.alias,
-      rating: userDoc?.rating,
-      gender: userDoc?.gender,
-      joined: false,
-      canJoin: false,
-      message: "No game is open yet. Wait for an admin to start the court board.",
-    });
+    return emptyBoardState(
+      {
+        role: "player",
+        alias: user.alias,
+        rating: userDoc?.rating,
+        gender: userDoc?.gender,
+        joined: false,
+        canJoin: false,
+        message: rosters.length
+          ? "Choose a scheduled roster below and press Join to reserve your spot."
+          : "No game is open yet. Wait for an admin to start the court board.",
+      },
+      rosters,
+    );
   }
 
   const owner = await db.collection<UserDoc>("users").findOne({ _id: ownerId });
@@ -141,11 +163,11 @@ async function buildPlayerState(db: Db, user: SessionUser): Promise<AppState> {
     message: joined
       ? "You are on the roster. The admin manages teams, scores, and game settings."
       : hasProfile
-        ? "Join to add your registered alias and rate to the player pool."
+        ? "Select a scheduled roster below to join the game with your registered alias and rate."
         : "Your player profile is incomplete. Register again to add a rate and gender.",
   };
 
-  return buildBoardState(db, ownerId, viewer);
+  return buildBoardState(db, ownerId, viewer, rosters);
 }
 
 export async function GET() {
@@ -154,9 +176,10 @@ export async function GET() {
     if (!user) return signInRequiredResponse();
 
     const db = await getDb();
+    const rosters = await loadRosterSummaries(db, user);
 
     if (user.role === "player") {
-      return NextResponse.json(await buildPlayerState(db, user));
+      return NextResponse.json(await buildPlayerState(db, user, rosters));
     }
 
     const ownerId = ownerObjectId(user);
@@ -169,12 +192,17 @@ export async function GET() {
       console.error("GET /api/state auto-advance failed", error);
     }
 
-    const state = await buildBoardState(db, ownerId, {
-      role: "admin",
-      alias: user.alias,
-      joined: false,
-      canJoin: false,
-    });
+    const state = await buildBoardState(
+      db,
+      ownerId,
+      {
+        role: "admin",
+        alias: user.alias,
+        joined: false,
+        canJoin: false,
+      },
+      rosters,
+    );
 
     return NextResponse.json(state);
   } catch (error) {
