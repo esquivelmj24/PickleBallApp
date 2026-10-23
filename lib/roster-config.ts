@@ -1,4 +1,6 @@
 export const ROSTER_CAPACITIES = [10, 20, 30, 40, 50, 60] as const;
+export const ROSTER_CAPACITY_MIN = 4;
+export const ROSTER_CAPACITY_MAX = 200;
 
 export type RosterCapacity = (typeof ROSTER_CAPACITIES)[number];
 
@@ -22,4 +24,11 @@ export function formatRosterTime(value: string): string {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+export function formatRosterTimeRange(startTime: string, endTime: string): string {
+  const start = formatRosterTime(startTime);
+  if (!endTime) return start;
+
+  return `${start} – ${formatRosterTime(endTime)}`;
 }

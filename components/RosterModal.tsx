@@ -1,14 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ROSTER_CAPACITIES, type RosterCapacity } from "@/lib/roster-config";
+import {
+  ROSTER_CAPACITIES,
+  ROSTER_CAPACITY_MAX,
+  ROSTER_CAPACITY_MIN,
+} from "@/lib/roster-config";
 import { AlertIcon, XIcon } from "./icons";
 
 export type RosterFormValues = {
   name: string;
   date: string;
-  time: string;
-  capacity: RosterCapacity;
+  startTime: string;
+  endTime: string;
+  capacity: number;
 };
 
 type RosterModalProps = {
@@ -25,8 +30,9 @@ function todayValue(): string {
 export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
   const [name, setName] = useState("");
   const [date, setDate] = useState(todayValue);
-  const [time, setTime] = useState("");
-  const [capacity, setCapacity] = useState<RosterCapacity>(10);
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [capacity, setCapacity] = useState("20");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -56,8 +62,28 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
       setError("Choose the scheduled date.");
       return;
     }
-    if (!time) {
-      setError("Choose the scheduled time.");
+    if (!startTime) {
+      setError("Choose the start time.");
+      return;
+    }
+    if (!endTime) {
+      setError("Choose the end time.");
+      return;
+    }
+    if (endTime <= startTime) {
+      setError("End time must be later than the start time.");
+      return;
+    }
+
+    const parsedCapacity = Number(capacity);
+    if (
+      !Number.isInteger(parsedCapacity) ||
+      parsedCapacity < ROSTER_CAPACITY_MIN ||
+      parsedCapacity > ROSTER_CAPACITY_MAX
+    ) {
+      setError(
+        `Enter a whole number of players from ${ROSTER_CAPACITY_MIN} to ${ROSTER_CAPACITY_MAX}.`,
+      );
       return;
     }
 
@@ -66,8 +92,9 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
       await onSubmit({
         name: trimmedName,
         date,
-        time,
-        capacity,
+        startTime,
+        endTime,
+        capacity: parsedCapacity,
       });
     } catch (submitError) {
       setError(
@@ -108,8 +135,8 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
         </div>
 
         <p className="modal-intro">
-          Set the date, time, and number of player slots. Players will see the roster on their
-          page and can reserve a spot until it is full.
+          Set the date, start and end times, and number of player slots. Players will see the
+          roster on their page and can reserve a spot until it is full or you end the transaction.
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -127,7 +154,7 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
             />
           </div>
 
-          <div className="roster-form-row">
+          <div className="roster-form-row roster-time-row">
             <div className="field-group">
               <label htmlFor="roster-date">Date</label>
               <input
@@ -139,40 +166,61 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
               />
             </div>
             <div className="field-group">
-              <label htmlFor="roster-time">Time</label>
+              <label htmlFor="roster-start-time">Start time</label>
               <input
-                id="roster-time"
+                id="roster-start-time"
                 className="text-input"
                 type="time"
-                value={time}
-                onChange={(event) => setTime(event.target.value)}
+                value={startTime}
+                onChange={(event) => setStartTime(event.target.value)}
+              />
+            </div>
+            <div className="field-group">
+              <label htmlFor="roster-end-time">End time</label>
+              <input
+                id="roster-end-time"
+                className="text-input"
+                type="time"
+                value={endTime}
+                onChange={(event) => setEndTime(event.target.value)}
               />
             </div>
           </div>
 
           <div className="field-group">
-            <label id="roster-capacity-label">Number of players</label>
-            <div
-              className="capacity-options"
-              role="radiogroup"
-              aria-labelledby="roster-capacity-label"
-            >
+            <label htmlFor="roster-capacity">Number of players</label>
+            <div className="capacity-manual-row">
+              <input
+                id="roster-capacity"
+                className="text-input capacity-input"
+                type="number"
+                inputMode="numeric"
+                min={ROSTER_CAPACITY_MIN}
+                max={ROSTER_CAPACITY_MAX}
+                step={1}
+                value={capacity}
+                onChange={(event) => setCapacity(event.target.value)}
+              />
+              <span className="capacity-unit">players max</span>
+            </div>
+            <div className="capacity-presets" aria-label="Quick capacity presets">
               {ROSTER_CAPACITIES.map((option) => (
                 <button
                   key={option}
                   type="button"
-                  role="radio"
-                  aria-checked={capacity === option}
-                  className={`capacity-option ${capacity === option ? "is-selected" : ""}`}
-                  onClick={() => setCapacity(option)}
+                  className={`capacity-chip ${
+                    Number(capacity) === option ? "is-selected" : ""
+                  }`}
+                  aria-pressed={Number(capacity) === option}
+                  onClick={() => setCapacity(String(option))}
                 >
-                  <strong>{option}</strong>
-                  <span>players</span>
+                  {option}
                 </button>
               ))}
             </div>
             <span className="field-hint">
-              The roster shows joined players in a ratio, for example 1/{capacity}.
+              Enter any number from {ROSTER_CAPACITY_MIN} to {ROSTER_CAPACITY_MAX}, or choose a
+              quick preset. The roster shows a ratio such as 1/{capacity || "N"}.
             </span>
           </div>
 

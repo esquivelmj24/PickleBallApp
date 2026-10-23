@@ -1,7 +1,7 @@
 import { ObjectId, type Db } from "mongodb";
 import type { SessionUser } from "./auth";
 import { type RosterDoc, type RosterEntryDoc, type UserDoc } from "./db";
-import { ROSTER_CAPACITIES, type RosterCapacity } from "./roster-config";
+import { ROSTER_CAPACITY_MAX, ROSTER_CAPACITY_MIN } from "./roster-config";
 import type { Roster } from "./types";
 
 export function validateRosterName(value: unknown): string | null {
@@ -40,11 +40,11 @@ export function validateRosterTime(value: unknown): string | null {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(time) ? time : null;
 }
 
-export function normalizeRosterCapacity(value: unknown): RosterCapacity | null {
+export function normalizeRosterCapacity(value: unknown): number | null {
   const capacity = typeof value === "number" ? value : Number(value);
-  return ROSTER_CAPACITIES.includes(capacity as RosterCapacity)
-    ? (capacity as RosterCapacity)
-    : null;
+  if (!Number.isInteger(capacity)) return null;
+  if (capacity < ROSTER_CAPACITY_MIN || capacity > ROSTER_CAPACITY_MAX) return null;
+  return capacity;
 }
 
 /**
@@ -58,10 +58,13 @@ export async function loadRosterSummaries(
   const rostersCollection = db.collection<RosterDoc>("rosters");
   const entriesCollection = db.collection<RosterEntryDoc>("rosterEntries");
 
-  const query = user.role === "admin" ? { ownerId: new ObjectId(user.id) } : {};
+  const query =
+    user.role === "admin"
+      ? { ownerId: new ObjectId(user.id) }
+      : { endedAt: null };
   const rosterDocs = await rostersCollection
     .find(query)
-    .sort({ scheduledDate: 1, scheduledTime: 1, createdAt: 1 })
+    .sort({ endedAt: 1, scheduledDate: 1, scheduledTime: 1, createdAt: 1 })
     .toArray();
 
   if (rosterDocs.length === 0) return [];
@@ -114,11 +117,14 @@ export async function loadRosterSummaries(
       id: roster._id.toString(),
       name: roster.name,
       date: roster.scheduledDate,
-      time: roster.scheduledTime,
+      startTime: roster.scheduledTime,
+      endTime: roster.scheduledEndTime ?? "",
       capacity: roster.capacity,
       joinedCount,
       remaining: Math.max(0, roster.capacity - joinedCount),
       full: joinedCount >= roster.capacity,
+      ended: Boolean(roster.endedAt),
+      endedAt: roster.endedAt ? roster.endedAt.toISOString() : null,
       joined: Boolean(viewerEntry),
       joinedAt: viewerEntry ? viewerEntry.createdAt.toISOString() : null,
       ownerAlias: ownerAliases.get(roster.ownerId.toString()) ?? "Admin",

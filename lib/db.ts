@@ -58,8 +58,17 @@ export async function getDb(): Promise<Db> {
         db.collection("matches").createIndex({ ownerId: 1, roundId: 1 }),
         db.collection("matches").createIndex({ ownerId: 1, "team1.playerId": 1 }),
         db.collection("matches").createIndex({ ownerId: 1, "team2.playerId": 1 }),
-        db.collection("rosters").createIndex({ ownerId: 1, scheduledDate: 1, scheduledTime: 1 }),
-        db.collection("rosters").createIndex({ scheduledDate: 1, scheduledTime: 1 }),
+        db.collection("rosters").createIndex({
+          ownerId: 1,
+          endedAt: 1,
+          scheduledDate: 1,
+          scheduledTime: 1,
+        }),
+        db.collection("rosters").createIndex({
+          endedAt: 1,
+          scheduledDate: 1,
+          scheduledTime: 1,
+        }),
         db.collection("rosterEntries").createIndex(
           { rosterId: 1, userId: 1 },
           { unique: true },
@@ -149,8 +158,10 @@ export type RosterDoc = {
   name: string;
   scheduledDate: string;
   scheduledTime: string;
+  scheduledEndTime?: string;
   capacity: number;
   joinedCount: number;
+  endedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };

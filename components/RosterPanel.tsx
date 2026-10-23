@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { formatRosterDate, formatRosterTime } from "@/lib/roster-config";
+import { formatRosterDate, formatRosterTimeRange } from "@/lib/roster-config";
 import type { Roster } from "@/lib/types";
 import {
   ArrowUpRightIcon,
   CalendarIcon,
   CheckIcon,
   ClockIcon,
+  LockIcon,
   PlusIcon,
   UsersIcon,
 } from "./icons";
@@ -93,6 +94,7 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
                 "game-roster-card",
                 roster.joined ? "is-joined" : "",
                 roster.full ? "is-full" : "",
+                roster.ended ? "is-ended" : "",
               ]
                 .filter(Boolean)
                 .join(" ");
@@ -102,7 +104,9 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
                   key={roster.id}
                   href={`/rosters/${roster.id}`}
                   className={cardClasses}
-                  aria-label={`Open details for ${roster.name}`}
+                  aria-label={`Open details for ${roster.name}${
+                    roster.ended ? " (ended)" : ""
+                  }`}
                 >
                   <span className="game-roster-hit">
                     <span className="game-roster-topline">
@@ -124,7 +128,7 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
                       </span>
                       <span>
                         <ClockIcon size={14} />
-                        {formatRosterTime(roster.time)}
+                        {formatRosterTimeRange(roster.startTime, roster.endTime)}
                       </span>
                       {!isAdmin ? (
                         <span className="game-roster-host">
@@ -172,23 +176,39 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
 
                     <span className="game-roster-footer">
                       <span className="game-roster-slots">
-                        {roster.full
-                          ? "Roster full"
-                          : `${roster.remaining} slot${roster.remaining === 1 ? "" : "s"} left`}
+                        {roster.ended
+                          ? "Transaction ended"
+                          : roster.full
+                            ? "Roster full"
+                            : `${roster.remaining} slot${roster.remaining === 1 ? "" : "s"} left`}
                       </span>
                       <span
                         className={`game-roster-status ${
-                          roster.joined ? "is-joined" : roster.full ? "is-full" : ""
+                          roster.ended
+                            ? "is-ended"
+                            : roster.joined
+                              ? "is-joined"
+                              : roster.full
+                                ? "is-full"
+                                : ""
                         }`}
                       >
-                        {roster.joined ? <CheckIcon size={13} /> : <ArrowUpRightIcon size={13} />}
-                        {roster.joined
-                          ? "Joined · View"
-                          : roster.full
-                            ? "View roster"
-                            : isAdmin
-                              ? "Manage roster"
-                              : "View roster"}
+                        {roster.ended ? (
+                          <LockIcon size={13} />
+                        ) : roster.joined ? (
+                          <CheckIcon size={13} />
+                        ) : (
+                          <ArrowUpRightIcon size={13} />
+                        )}
+                        {roster.ended
+                          ? "Ended · View"
+                          : roster.joined
+                            ? "Joined · View"
+                            : roster.full
+                              ? "View roster"
+                              : isAdmin
+                                ? "Manage roster"
+                                : "View roster"}
                       </span>
                     </span>
                   </span>
@@ -199,7 +219,7 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
 
           <p className="game-rosters-footnote">
             {isAdmin
-              ? "Open a roster to access the game board and Players & ratings. The roster list stays focused on the schedule."
+              ? "Open a roster to access the game board and Players & ratings. Use End Transaction to close sign-ups without deleting the roster history."
               : "Open any roster to review its details and joined players. Joining is available on the roster details page."}
           </p>
         </>

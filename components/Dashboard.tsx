@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { genderLabel } from "@/lib/constants";
 import { courtDisplayName } from "@/lib/courts";
-import { formatRosterDate, formatRosterTime } from "@/lib/roster-config";
+import { formatRosterDate, formatRosterTimeRange } from "@/lib/roster-config";
 import type { AppState, CourtLayout, Match, MatchMode, Player, Roster } from "@/lib/types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { LineupModal } from "./LineupModal";
@@ -69,6 +69,7 @@ export function Dashboard({
   const [deletePlayer, setDeletePlayer] = useState<Player | null>(null);
   const [resetGameOpen, setResetGameOpen] = useState(false);
   const [clearAllOpen, setClearAllOpen] = useState(false);
+  const [endRosterOpen, setEndRosterOpen] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
   const [rosterModalOpen, setRosterModalOpen] = useState(false);
@@ -311,6 +312,15 @@ export function Dashboard({
     window.setTimeout(() => {
       document.getElementById("rosters")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 80);
+  }
+
+  async function handleEndRoster() {
+    if (!activeRoster) return;
+
+    await apiRequest(`/api/rosters/${activeRoster.id}/end`, { method: "POST" });
+    setEndRosterOpen(false);
+    await loadState();
+    showToast(`${activeRoster.name} ended. It is no longer available to players.`);
   }
 
   async function handleJoinRoster(roster: Roster) {
@@ -592,6 +602,7 @@ export function Dashboard({
               isAdmin={isAdmin}
               joiningId={joiningRosterId}
               onJoin={handleJoinRoster}
+              onEndRoster={() => setEndRosterOpen(true)}
             />
 
             {!isAdmin ? (
@@ -618,7 +629,7 @@ export function Dashboard({
                     </span>
                     <span>
                       <ClockIcon size={13} />
-                      {formatRosterTime(activeRoster.time)}
+                      {formatRosterTimeRange(activeRoster.startTime, activeRoster.endTime)}
                     </span>
                     <span className="player-banner-roster-ratio">
                       {activeRoster.joinedCount}/{activeRoster.capacity} joined ·{" "}
@@ -781,6 +792,18 @@ export function Dashboard({
           requirePhrase="CLEAR ALL"
           onClose={() => setClearAllOpen(false)}
           onConfirm={handleClearAll}
+        />
+      ) : null}
+
+      {isAdmin && endRosterOpen && activeRoster ? (
+        <ConfirmDialog
+          title={`End ${activeRoster.name}?`}
+          message="This ends the roster transaction and removes it from player roster lists. No one else can join, but the joined-player list, board, and history stay available to you."
+          confirmLabel="End Transaction"
+          cancelLabel="Keep roster open"
+          workingLabel="Ending…"
+          onClose={() => setEndRosterOpen(false)}
+          onConfirm={handleEndRoster}
         />
       ) : null}
 

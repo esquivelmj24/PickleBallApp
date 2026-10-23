@@ -5061,6 +5061,15 @@ a {
   background: var(--paper-warm);
 }
 
+.game-roster-card.is-ended {
+  background: linear-gradient(145deg, var(--paper-warm), var(--paper));
+  border-style: dashed;
+}
+
+.game-roster-card.is-ended .game-roster-name {
+  color: var(--muted);
+}
+
 .game-roster-hit {
   display: flex;
   flex: 1;
@@ -5265,6 +5274,12 @@ a {
   color: #9e3524;
   background: #fff0eb;
   border-color: #f4d1c7;
+}
+
+.game-roster-status.is-ended {
+  color: #6b5a2e;
+  background: #f6efd9;
+  border-color: #e4d7b2;
 }
 
 .game-roster-empty {
@@ -5525,6 +5540,12 @@ a {
   border-color: rgba(56, 161, 105, 0.24);
 }
 
+.roster-detail-join.is-ended {
+  background: var(--paper-warm);
+  border-color: var(--line-strong);
+  border-style: dashed;
+}
+
 .roster-detail-join-copy {
   display: grid;
   min-width: 0;
@@ -5550,6 +5571,10 @@ a {
 }
 
 .roster-detail-admin-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-top: 22px;
   padding: 14px 16px;
   background: var(--paper-warm);
@@ -5557,11 +5582,20 @@ a {
   border-radius: 14px;
 }
 
+.roster-detail-admin-note-copy {
+  min-width: 0;
+}
+
 .roster-detail-admin-note p {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 10.5px;
   line-height: 1.55;
+}
+
+.roster-detail-admin-note .btn,
+.roster-detail-admin-note .game-roster-status {
+  flex-shrink: 0;
 }
 
 .roster-missing {
@@ -5615,57 +5649,57 @@ a {
   min-width: 0;
 }
 
-.capacity-options {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+.roster-time-row {
+  grid-template-columns: 1.2fr 1fr 1fr;
 }
 
-.capacity-option {
+.capacity-manual-row {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  padding: 11px 12px;
-  color: var(--ink);
+  align-items: center;
+  gap: 10px;
+}
+
+.capacity-input {
+  max-width: 150px;
+}
+
+.capacity-unit {
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.capacity-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.capacity-chip {
+  min-width: 38px;
+  padding: 6px 9px;
+  color: var(--ink-soft);
   background: var(--paper-warm);
   border: 1px solid var(--line);
-  border-radius: 12px;
-  text-align: left;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
   transition: 160ms ease;
 }
 
-.capacity-option:hover {
+.capacity-chip:hover {
   background: var(--paper);
   border-color: var(--line-strong);
 }
 
-.capacity-option strong {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-}
-
-.capacity-option span {
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 600;
-}
-
-.capacity-option.is-selected {
+.capacity-chip.is-selected {
+  color: var(--lime);
   background: var(--forest);
   border-color: var(--forest);
-  box-shadow: 0 8px 18px rgba(16, 46, 41, 0.16);
-}
-
-.capacity-option.is-selected strong {
-  color: var(--lime);
-}
-
-.capacity-option.is-selected span {
-  color: rgba(255, 255, 255, 0.7);
 }
 
 @media (max-width: 720px) {
@@ -5698,6 +5732,15 @@ a {
   .roster-detail-join .btn {
     width: 100%;
   }
+
+  .roster-detail-admin-note {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .roster-detail-admin-note .btn {
+    width: 100%;
+  }
 }
 
 @media (max-width: 540px) {
@@ -5717,9 +5760,5 @@ a {
   .roster-form-row {
     grid-template-columns: 1fr;
     gap: 0;
-  }
-
-  .capacity-options {
-    grid-template-columns: repeat(2, 1fr);
   }
 }

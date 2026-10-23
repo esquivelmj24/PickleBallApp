@@ -8,9 +8,10 @@ Built with **Next.js 15 (App Router)**, **TypeScript**, and **MongoDB**.
 
 - **Admin and player accounts** — choose **Admin user** or **Player user** during registration. Admins register with an alias and password. Players register with an alias, password, **Rate** (2.0–4.0), and **Gender**. Passwords are hashed with scrypt, and signed HTTP-only session cookies keep users signed in for seven days.
 - **Private admin boards** — every player, match, and reset is scoped to the signed-in admin, so each admin creates and manages only their own games.
-- **Player participation** — a signed-in player lands on the **Balanced Courts, Better Games** dashboard and sees every scheduled game roster. Opening a roster shows the board linked to that roster’s admin. Players can review game and player details, but all setup, score, lineup, reset, and roster-management controls are hidden. The only write action is joining a scheduled roster.
-- **Scheduled game rosters** — admins create rosters with a date, time, roster name, and player capacity of 10, 20, 30, 40, 50, or 60. Each roster displays its name, date, time, and joined/capacity ratio (for example `1/10`), with a progress bar and remaining slot count.
-- **Dedicated roster details page** — selecting any roster card opens `/rosters/:id`. The page shows the roster name, date, time, host, joined/capacity ratio, and the full list of joined players. The main dashboard stays focused on the hero, stats, and roster list; the **Set up the game** board and **Players & ratings** section render only after opening a roster. A **Back to rosters** button returns to the roster list.
+- **Player participation** — a signed-in player lands on the **Balanced Courts, Better Games** dashboard and sees every active scheduled game roster. Opening a roster shows the board linked to that roster’s admin. Players can review game and player details, but all setup, score, lineup, reset, and roster-management controls are hidden. The only write action is joining a scheduled roster.
+- **Scheduled game rosters** — admins create rosters with a date, start and end times, a roster name, and a manually assigned player capacity from 4 to 200 (with 10, 20, 30, 40, 50, and 60 quick presets). Each roster displays its name, date, time range, and joined/capacity ratio (for example `1/10`), with a progress bar and remaining slot count.
+- **End Transaction** — an admin can close a roster from its details page. Ended rosters disappear from player roster lists, reject new joins, and remain visible to the admin with an **Ended** badge and their joined-player history.
+- **Dedicated roster details page** — selecting any roster card opens `/rosters/:id`. The page shows the roster name, date, time range, host, joined/capacity ratio, and the full list of joined players. The main dashboard stays focused on the hero, stats, and roster list; the **Set up the game** board and **Players & ratings** section render only after opening a roster. A **Back to rosters** button returns to the roster list.
 - **Player roster review and Join** — players open a roster to review its details and full joined-player list before pressing **Join this roster**. Joined and full states are shown, the player’s own entry is marked, and the ratio refreshes automatically for everyone viewing the page.
 - **Rate-based Join** — joining a roster is idempotent and always uses the player account's registered alias and rate. It links an existing same-name board entry when possible, otherwise adds a new player, then reserves a roster slot with an atomic capacity check.
 - **Background themes** — choose **Classic**, **Dark**, **Gray**, or **Black & Yellow** from the theme selector. The choice is saved in the browser and applied on the login and dashboard screens.
@@ -75,11 +76,11 @@ The app creates these collections automatically:
 
 - `players` — `ownerId` (admin account), optional `userId` for a linked player account, name, optional gender, rating, play counts, record, point totals
 - `matches` — `ownerId` (admin account), round id, court number, matchmaking mode, queue position, team snapshots, scores, status
-- `rosters` — `ownerId` (admin account), roster name, scheduled date (`YYYY-MM-DD`), scheduled time (`HH:MM`), capacity, and the atomic joined-slot counter
+- `rosters` — `ownerId` (admin account), roster name, scheduled date (`YYYY-MM-DD`), scheduled start and end times (`HH:MM`), capacity, the atomic joined-slot counter, and an optional `endedAt` timestamp
 - `rosterEntries` — one membership per roster and player account, including owner, linked board player, name, rating, and join timestamp
 - `users` — alias, normalized alias key, scrypt password hash, role (`admin` or `player`), optional player rate and gender, and timestamps
 
-Player names are unique per admin, not across the whole database. A player account can link to one board per admin, so the same account may join rosters hosted by more than one admin. Indexes for owner-scoped player names, per-admin player-account links, unique roster memberships, and owner-scoped match and roster lookups are created on first connection.
+Player names are unique per admin, not across the whole database. A player account can link to one board per admin, so the same account may join rosters hosted by more than one admin. Indexes for owner-scoped player names, per-admin player-account links, unique roster memberships, active/ended roster lookups, and owner-scoped match and roster lookups are created on first connection.
 
 To try the interface with a sample roster, use **Load sample roster** in the empty roster panel. It is only available while the roster is empty.
 
@@ -202,9 +203,9 @@ Until the first result is entered, the top five are ordered by committee rating.
 
 ### Player access
 
-- Players see every scheduled game roster, whether or not they have joined one. Selecting a roster card opens its dedicated details page at `/rosters/:id`, scoped to that roster’s admin board.
-- Roster cards display the name, date, time, host alias, joined/capacity ratio, progress bar, remaining slots, and a compact preview of joined players. The signed-in player's own entry is marked, and the ratio is derived from roster memberships and refreshes automatically.
-- The roster details page shows the full joined-player list with ratings and marks the signed-in player. The **Join this roster** action appears below the list. After joining, the player banner names the roster with its date, time, and ratio above the current rotation, players & ratings, leaderboard, level key, and recent results cards. A **Back to rosters** button returns to the main list.
+- Players see every active scheduled game roster, whether or not they have joined one. Ended rosters are hidden from player lists and cannot be joined. Selecting a roster card opens its dedicated details page at `/rosters/:id`, scoped to that roster’s admin board.
+- Roster cards display the name, date, time range, host alias, joined/capacity ratio, progress bar, remaining slots, and a compact preview of joined players. The signed-in player's own entry is marked, and the ratio is derived from roster memberships and refreshes automatically.
+- The roster details page shows the full joined-player list with ratings and marks the signed-in player. The **Join this roster** action appears below the list. After joining, the player banner names the roster with its date, time range, and ratio above the current rotation, players & ratings, leaderboard, level key, and recent results cards. A **Back to rosters** button returns to the main list.
 - Players cannot create, edit, or delete rosters, players, matches, or scores. Those controls are removed from the player interface, and admin API routes reject player sessions.
 - **Join this roster** is the player write action. It uses the account's registered alias and rate, links a same-name board entry when one exists, creates a new player entry otherwise, and reserves one roster slot. Join is idempotent, and the capacity check is atomic so the final slot cannot be taken twice. Repeated joins return the current ratio instead of creating a duplicate membership.
 - If no admin board or roster exists yet, the player sees an empty waiting state until an admin schedules a game.
@@ -226,9 +227,10 @@ Until the first result is entered, the top five are ordered by committee rating.
 | `POST /api/auth/login` | Sign in with `alias` and `password`; returns the account role and `401` for invalid credentials |
 | `POST /api/auth/logout` | Clear the session cookie |
 | `GET /api/state` | Role-aware. Admins get their own board, rosters, and automatic next rotation; players get all scheduled rosters and Join availability, plus the board they joined or the latest active admin board. Add `?rosterId=:id` to scope the board to a specific roster’s admin (used by the roster details page) |
-| `GET /api/rosters` | Signed-in users. Admins get their own scheduled rosters; players get all scheduled rosters with joined counts and their own joined state |
-| `POST /api/rosters` | Admin only. Create a roster with `name`, `date` (`YYYY-MM-DD`), `time` (`HH:MM`), and `capacity` of 10, 20, 30, 40, 50, or 60 |
-| `POST /api/rosters/:id/join` | Player only. Select and join a scheduled roster. Reserves a slot atomically, links or creates the player's board entry, and is idempotent |
+| `GET /api/rosters` | Signed-in users. Admins get their own scheduled rosters, including ended rosters; players get active scheduled rosters only, with joined counts and their own joined state |
+| `POST /api/rosters` | Admin only. Create a roster with `name`, `date` (`YYYY-MM-DD`), `startTime` and `endTime` (`HH:MM`, end must be later), and a whole-number `capacity` from 4 to 200 |
+| `POST /api/rosters/:id/end` | Admin only, owner-scoped. End a roster transaction by setting `endedAt`; ended rosters disappear from player lists and reject new joins |
+| `POST /api/rosters/:id/join` | Player only. Select and join an active scheduled roster. Rejects ended or full rosters, reserves a slot atomically, links or creates the player's board entry, and is idempotent |
 | `POST /api/player/join` | Player only. Legacy direct board join using the account's registered alias and rate; links or creates the board entry and is idempotent |
 | `GET /api/players` | Admin only. The signed-in admin's roster |
 | `POST /api/players` | Admin only. Add a rated player to the signed-in admin's roster |

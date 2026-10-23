@@ -36,6 +36,9 @@ export async function POST(_request: Request, context: RouteContext) {
       );
     }
     if (!roster) return jsonError("That roster no longer exists.", 404);
+    if (roster.endedAt) {
+      return jsonError("This roster has ended and is no longer accepting players.", 409);
+    }
 
     const entries = db.collection<RosterEntryDoc>("rosterEntries");
     const existingEntry = await entries.findOne({ rosterId, userId });
@@ -54,6 +57,7 @@ export async function POST(_request: Request, context: RouteContext) {
     const reserved = await db.collection<RosterDoc>("rosters").findOneAndUpdate(
       {
         _id: rosterId,
+        endedAt: null,
         $expr: {
           $lt: [{ $ifNull: ["$joinedCount", 0] }, "$capacity"],
         },
@@ -66,6 +70,10 @@ export async function POST(_request: Request, context: RouteContext) {
     );
 
     if (!reserved) {
+      const latest = await db.collection<RosterDoc>("rosters").findOne({ _id: rosterId });
+      if (latest?.endedAt) {
+        return jsonError("This roster has ended and is no longer accepting players.", 409);
+      }
       return jsonError("This roster is full. Choose another scheduled game.", 409);
     }
 

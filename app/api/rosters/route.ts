@@ -15,6 +15,7 @@ import {
   validateRosterName,
   validateRosterTime,
 } from "@/lib/rosters";
+import { ROSTER_CAPACITY_MAX, ROSTER_CAPACITY_MIN } from "@/lib/roster-config";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -40,7 +41,8 @@ export async function POST(request: Request) {
     const body = await readBody(request);
     const name = validateRosterName(body.name);
     const scheduledDate = validateRosterDate(body.date);
-    const scheduledTime = validateRosterTime(body.time);
+    const scheduledTime = validateRosterTime(body.startTime ?? body.time);
+    const scheduledEndTime = validateRosterTime(body.endTime);
     const capacity = normalizeRosterCapacity(body.capacity);
 
     if (!name) {
@@ -50,10 +52,18 @@ export async function POST(request: Request) {
       return jsonError("Choose a valid scheduled date.");
     }
     if (!scheduledTime) {
-      return jsonError("Choose a valid scheduled time.");
+      return jsonError("Choose a valid start time.");
+    }
+    if (!scheduledEndTime) {
+      return jsonError("Choose a valid end time.");
+    }
+    if (scheduledEndTime <= scheduledTime) {
+      return jsonError("End time must be later than the start time.");
     }
     if (!capacity) {
-      return jsonError("Player capacity must be 10, 20, 30, 40, 50, or 60.");
+      return jsonError(
+        `Player capacity must be a whole number from ${ROSTER_CAPACITY_MIN} to ${ROSTER_CAPACITY_MAX}.`,
+      );
     }
 
     const now = new Date();
@@ -62,8 +72,10 @@ export async function POST(request: Request) {
       name,
       scheduledDate,
       scheduledTime,
+      scheduledEndTime,
       capacity,
       joinedCount: 0,
+      endedAt: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -78,11 +90,14 @@ export async function POST(request: Request) {
         id: result.insertedId.toString(),
         name,
         date: scheduledDate,
-        time: scheduledTime,
+        startTime: scheduledTime,
+        endTime: scheduledEndTime,
         capacity,
         joinedCount: 0,
         remaining: capacity,
         full: false,
+        ended: false,
+        endedAt: null,
         joined: false,
         joinedAt: null,
         ownerAlias: admin.alias,

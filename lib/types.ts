@@ -56,11 +56,14 @@ export type Roster = {
   id: string;
   name: string;
   date: string;
-  time: string;
+  startTime: string;
+  endTime: string;
   capacity: number;
   joinedCount: number;
   remaining: number;
   full: boolean;
+  ended: boolean;
+  endedAt: string | null;
   joined: boolean;
   joinedAt: string | null;
   ownerAlias: string;

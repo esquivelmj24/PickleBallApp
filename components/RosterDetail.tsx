@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { getLevel } from "@/lib/levels";
-import { formatRosterDate, formatRosterTime } from "@/lib/roster-config";
+import { formatRosterDate, formatRosterTimeRange } from "@/lib/roster-config";
 import type { Roster } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import {
@@ -10,6 +10,7 @@ import {
   CalendarIcon,
   CheckIcon,
   ClockIcon,
+  LockIcon,
   PlusIcon,
   UsersIcon,
 } from "./icons";
@@ -19,6 +20,7 @@ type RosterDetailProps = {
   isAdmin: boolean;
   joiningId: string | null;
   onJoin: (roster: Roster) => Promise<void>;
+  onEndRoster: () => void;
 };
 
 export function RosterDetail({
@@ -26,6 +28,7 @@ export function RosterDetail({
   isAdmin,
   joiningId,
   onJoin,
+  onEndRoster,
 }: RosterDetailProps) {
   const members = [...roster.members].sort(
     (a, b) =>
@@ -56,11 +59,18 @@ export function RosterDetail({
               You joined
             </span>
           ) : null}
-          <span className={`game-roster-status ${roster.full ? "is-full" : ""}`}>
-            {roster.full
-              ? "Roster full"
-              : `${roster.remaining} slot${roster.remaining === 1 ? "" : "s"} left`}
-          </span>
+          {roster.ended ? (
+            <span className="game-roster-status is-ended">
+              <LockIcon size={13} />
+              Roster ended
+            </span>
+          ) : (
+            <span className={`game-roster-status ${roster.full ? "is-full" : ""}`}>
+              {roster.full
+                ? "Roster full"
+                : `${roster.remaining} slot${roster.remaining === 1 ? "" : "s"} left`}
+            </span>
+          )}
         </div>
       </div>
 
@@ -70,10 +80,14 @@ export function RosterDetail({
           <h1 id="roster-detail-title">{roster.name}</h1>
           <p>
             {isAdmin
-              ? "Review the joined players, then use the game board below to prepare the rotation."
-              : roster.joined
-                ? "Your spot is reserved. Review the players and follow the live rotation below."
-                : "Review the date, time, and joined players before deciding whether to join."}
+              ? roster.ended
+                ? "This transaction has ended. The roster is closed to players, but its joined-player list and board history remain available."
+                : "Review the joined players, then use the game board below to prepare the rotation."
+              : roster.ended
+                ? "This roster has ended and is no longer accepting players."
+                : roster.joined
+                  ? "Your spot is reserved. Review the players and follow the live rotation below."
+                  : "Review the date, time, and joined players before deciding whether to join."}
           </p>
         </div>
         <div
@@ -94,7 +108,7 @@ export function RosterDetail({
         </span>
         <span>
           <ClockIcon size={15} />
-          {formatRosterTime(roster.time)}
+          {formatRosterTimeRange(roster.startTime, roster.endTime)}
         </span>
         <span>
           <UsersIcon size={15} />
@@ -149,33 +163,45 @@ export function RosterDetail({
       </div>
 
       {!isAdmin ? (
-        <div className={`roster-detail-join ${roster.joined ? "is-joined" : ""}`}>
+        <div
+          className={`roster-detail-join ${
+            roster.joined ? "is-joined" : roster.ended ? "is-ended" : ""
+          }`}
+        >
           <div className="roster-detail-join-copy">
             <strong>
-              {roster.joined
-                ? "Your spot is reserved"
-                : roster.full
-                  ? "This roster is full"
-                  : "Ready to join this roster?"}
+              {roster.ended
+                ? "This roster has ended"
+                : roster.joined
+                  ? "Your spot is reserved"
+                  : roster.full
+                    ? "This roster is full"
+                    : "Ready to join this roster?"}
             </strong>
             <span>
-              {roster.joined
-                ? `${roster.joinedCount}/${roster.capacity} players joined · ${roster.remaining} slots remain`
-                : roster.full
-                  ? "Choose another scheduled roster to join."
-                  : `${roster.remaining} of ${roster.capacity} slots remain for this game.`}
+              {roster.ended
+                ? "The admin has closed this transaction and it is no longer accepting players."
+                : roster.joined
+                  ? `${roster.joinedCount}/${roster.capacity} players joined · ${roster.remaining} slots remain`
+                  : roster.full
+                    ? "Choose another scheduled roster to join."
+                    : `${roster.remaining} of ${roster.capacity} slots remain for this game.`}
             </span>
           </div>
           <button
             type="button"
-            className={`btn ${roster.joined || roster.full ? "btn-outline" : "btn-primary"} btn-small`}
+            className={`btn ${
+              roster.joined || roster.full || roster.ended ? "btn-outline" : "btn-primary"
+            } btn-small`}
             onClick={() => void onJoin(roster)}
-            disabled={roster.joined || roster.full || joiningId === roster.id}
+            disabled={roster.joined || roster.full || roster.ended || joiningId === roster.id}
           >
             {joiningId === roster.id ? (
               <span className="spinner spinner-light" />
             ) : roster.joined ? (
               <CheckIcon size={15} />
+            ) : roster.ended ? (
+              <LockIcon size={15} />
             ) : (
               <PlusIcon size={15} />
             )}
@@ -183,18 +209,34 @@ export function RosterDetail({
               ? "Joining…"
               : roster.joined
                 ? "Joined"
-                : roster.full
-                  ? "Roster full"
-                  : "Join this roster"}
+                : roster.ended
+                  ? "Roster ended"
+                  : roster.full
+                    ? "Roster full"
+                    : "Join this roster"}
           </button>
         </div>
       ) : (
         <div className="roster-detail-admin-note">
-          <span className="eyebrow">Admin controls</span>
-          <p>
-            The game board and Players &amp; ratings sections are available below. They are hidden
-            from the main roster list and only appear after opening a specific roster.
-          </p>
+          <div className="roster-detail-admin-note-copy">
+            <span className="eyebrow">Admin controls</span>
+            <p>
+              {roster.ended
+                ? "This transaction is ended and hidden from player roster lists. The game board below remains available for reference."
+                : "The game board and Players & ratings sections are available below. End the transaction when the roster should stop accepting players."}
+            </p>
+          </div>
+          {roster.ended ? (
+            <span className="game-roster-status is-ended">
+              <LockIcon size={13} />
+              Ended
+            </span>
+          ) : (
+            <button type="button" className="btn btn-danger btn-small" onClick={onEndRoster}>
+              <LockIcon size={15} />
+              End Transaction
+            </button>
+          )}
         </div>
       )}
     </section>
