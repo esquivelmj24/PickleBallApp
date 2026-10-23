@@ -5054,6 +5054,12 @@ a {
   box-shadow: 0 0 0 2px rgba(16, 46, 41, 0.13);
 }
 
+@media (min-width: 721px) {
+  .game-rosters-panel:not(.is-admin) .game-roster-card.is-selected {
+    grid-column: 1 / -1;
+  }
+}
+
 .game-roster-card.is-joined {
   background: linear-gradient(145deg, rgba(221, 244, 91, 0.16), var(--paper));
   border-color: rgba(56, 161, 105, 0.38);
@@ -5301,6 +5307,8 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  padding-top: 11px;
+  border-top: 1px dashed var(--line);
 }
 
 .game-roster-join-copy {
@@ -5325,8 +5333,6 @@ a {
 .game-roster-joined-list {
   display: grid;
   gap: 7px;
-  padding-top: 10px;
-  border-top: 1px dashed var(--line);
 }
 
 .game-roster-joined-head {
@@ -5343,12 +5349,8 @@ a {
 
 .game-roster-joined-chips {
   display: flex;
-  max-height: 98px;
   flex-wrap: wrap;
   gap: 5px;
-  overflow: auto;
-  padding-right: 2px;
-  scrollbar-width: thin;
 }
 
 .game-roster-joined-chip {

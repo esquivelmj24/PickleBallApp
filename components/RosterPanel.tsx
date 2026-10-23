@@ -46,7 +46,7 @@ export function RosterPanel({
             <p className="game-rosters-lede">
               {isAdmin
                 ? "Create scheduled games and watch the joined/capacity ratio update as players reserve spots."
-                : "Pick a roster, then use the Join button inside it. Your registered rate is added to the host's board automatically."}
+                : "Pick a roster to review its details and joined players, then use the Join button inside it when you are ready. Your registered rate is added to the host's board automatically."}
             </p>
           </div>
         </div>
@@ -150,37 +150,39 @@ export function RosterPanel({
                       <span style={{ width: `${progress}%` }} />
                     </span>
 
-                    <span className="game-roster-people">
-                      {orderedMembers.length > 0 ? (
-                        <>
-                          {visibleMembers.map((member) => (
-                            <span
-                              key={member.playerId}
-                              className={`game-roster-person ${member.isViewer ? "is-viewer" : ""}`}
-                              title={`${member.name} · ${member.rating.toFixed(1)}`}
-                            >
-                              {member.name}
-                              {member.isViewer ? (
-                                <span className="game-roster-person-you">you</span>
-                              ) : null}
-                            </span>
-                          ))}
-                          {hiddenMemberCount > 0 ? (
-                            <span
-                              className="game-roster-person is-more"
-                              title={orderedMembers
-                                .slice(visibleMembers.length)
-                                .map((member) => member.name)
-                                .join(", ")}
-                            >
-                              +{hiddenMemberCount} more
-                            </span>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span className="game-roster-people-empty">No players joined yet</span>
-                      )}
-                    </span>
+                    {!selected ? (
+                      <span className="game-roster-people">
+                        {orderedMembers.length > 0 ? (
+                          <>
+                            {visibleMembers.map((member) => (
+                              <span
+                                key={member.playerId}
+                                className={`game-roster-person ${member.isViewer ? "is-viewer" : ""}`}
+                                title={`${member.name} · ${member.rating.toFixed(1)}`}
+                              >
+                                {member.name}
+                                {member.isViewer ? (
+                                  <span className="game-roster-person-you">you</span>
+                                ) : null}
+                              </span>
+                            ))}
+                            {hiddenMemberCount > 0 ? (
+                              <span
+                                className="game-roster-person is-more"
+                                title={orderedMembers
+                                  .slice(visibleMembers.length)
+                                  .map((member) => member.name)
+                                  .join(", ")}
+                              >
+                                +{hiddenMemberCount} more
+                              </span>
+                            ) : null}
+                          </>
+                        ) : (
+                          <span className="game-roster-people-empty">No players joined yet</span>
+                        )}
+                      </span>
+                    ) : null}
 
                     <span className="game-roster-footer">
                       <span className="game-roster-slots">
@@ -205,6 +207,35 @@ export function RosterPanel({
 
                   {!isAdmin && selected ? (
                     <div className="game-roster-join">
+                      <div className="game-roster-joined-list">
+                        <div className="game-roster-joined-head">
+                          <span>Players who joined</span>
+                          <span>
+                            {roster.joinedCount} of {roster.capacity} players
+                          </span>
+                        </div>
+                        {orderedMembers.length > 0 ? (
+                          <div className="game-roster-joined-chips">
+                            {orderedMembers.map((member) => (
+                              <span
+                                key={member.playerId}
+                                className={`game-roster-joined-chip ${member.isViewer ? "is-viewer" : ""}`}
+                              >
+                                {member.name}
+                                {member.isViewer ? (
+                                  <span className="game-roster-person-you">you</span>
+                                ) : null}
+                                <small>{member.rating.toFixed(1)}</small>
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="game-roster-joined-empty">
+                            No players joined yet. Be the first to reserve a spot.
+                          </span>
+                        )}
+                      </div>
+
                       <div className="game-roster-join-main">
                         <div className="game-roster-join-copy">
                           <strong>
@@ -212,7 +243,7 @@ export function RosterPanel({
                               ? "Your spot is reserved"
                               : roster.full
                                 ? "This roster is full"
-                                : "Reserve your spot"}
+                                : "Ready to join this roster?"}
                           </strong>
                           <span>
                             {roster.joined
@@ -244,35 +275,6 @@ export function RosterPanel({
                                 : "Join this roster"}
                         </button>
                       </div>
-
-                      <div className="game-roster-joined-list">
-                        <div className="game-roster-joined-head">
-                          <span>Players joined</span>
-                          <span>
-                            {roster.joinedCount}/{roster.capacity}
-                          </span>
-                        </div>
-                        {orderedMembers.length > 0 ? (
-                          <div className="game-roster-joined-chips">
-                            {orderedMembers.map((member) => (
-                              <span
-                                key={member.playerId}
-                                className={`game-roster-joined-chip ${member.isViewer ? "is-viewer" : ""}`}
-                              >
-                                {member.name}
-                                {member.isViewer ? (
-                                  <span className="game-roster-person-you">you</span>
-                                ) : null}
-                                <small>{member.rating.toFixed(1)}</small>
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="game-roster-joined-empty">
-                            No players joined yet. Be the first to reserve a spot.
-                          </span>
-                        )}
-                      </div>
                     </div>
                   ) : null}
                 </article>
@@ -282,7 +284,8 @@ export function RosterPanel({
 
           {!isAdmin ? (
             <p className="game-rosters-footnote">
-              Ratios refresh automatically. Select another roster at any time to see its open slots.
+              Select a roster to review its date, time, joined players, and open slots before
+              deciding whether to join. Ratios refresh automatically.
             </p>
           ) : null}
         </>
