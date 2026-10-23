@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { genderLabel } from "@/lib/constants";
 import { courtDisplayName } from "@/lib/courts";
@@ -10,12 +11,14 @@ import { LineupModal } from "./LineupModal";
 import { MatchBoard } from "./MatchBoard";
 import { PlayerModal } from "./PlayerModal";
 import { PlayerRoster } from "./PlayerRoster";
+import { RosterDetail } from "./RosterDetail";
 import { RosterModal, type RosterFormValues } from "./RosterModal";
 import { RosterPanel } from "./RosterPanel";
 import { LevelGuide, RecentResults, TopFive } from "./SidePanels";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
   AlertIcon,
+  ArrowLeftIcon,
   ArrowUpRightIcon,
   CalendarIcon,
   CheckIcon,
@@ -47,8 +50,17 @@ async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
   return payload;
 }
 
-export function Dashboard({ alias, role }: { alias: string; role: "admin" | "player" }) {
+export function Dashboard({
+  alias,
+  role,
+  rosterId,
+}: {
+  alias: string;
+  role: "admin" | "player";
+  rosterId?: string;
+}) {
   const isAdmin = role === "admin";
+  const isRosterView = Boolean(rosterId);
   const [state, setState] = useState<AppState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -62,19 +74,25 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
   const [rosterModalOpen, setRosterModalOpen] = useState(false);
   const [joiningRosterId, setJoiningRosterId] = useState<string | null>(null);
 
-  const loadState = useCallback(async (initial = false) => {
-    if (initial) setLoading(true);
-    try {
-      const nextState = await apiRequest<AppState>("/api/state", { cache: "no-store" });
-      setState(nextState);
-      setLoadError("");
-    } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Could not load the court board.");
-      if (initial) setState(null);
-    } finally {
-      if (initial) setLoading(false);
-    }
-  }, []);
+  const loadState = useCallback(
+    async (initial = false) => {
+      if (initial) setLoading(true);
+      try {
+        const endpoint = rosterId
+          ? `/api/state?rosterId=${encodeURIComponent(rosterId)}`
+          : "/api/state";
+        const nextState = await apiRequest<AppState>(endpoint, { cache: "no-store" });
+        setState(nextState);
+        setLoadError("");
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : "Could not load the court board.");
+        if (initial) setState(null);
+      } finally {
+        if (initial) setLoading(false);
+      }
+    },
+    [rosterId],
+  );
 
   useEffect(() => {
     void loadState(true);
@@ -178,6 +196,11 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
         result.rosters === 1 ? "" : "s"
       } removed.`,
     );
+    if (isRosterView) {
+      window.setTimeout(() => {
+        window.location.href = "/#rosters";
+      }, 650);
+    }
   }
 
   async function handleLogout() {
@@ -343,18 +366,10 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
     return lineupSingleCourt ? "Court" : courtDisplayName(lineupMatch.court);
   }, [lineupMatch, lineupQueued, lineupSingleCourt]);
 
-  const activeJoinedRoster = useMemo(() => {
-    if (!state) return null;
-    const joined = state.rosters.filter((roster) => roster.joined && roster.joinedAt);
-    const onBoard = joined.filter(
-      (roster) => roster.ownerAlias === state.viewer.boardOwnerAlias,
-    );
-    return (
-      [...(onBoard.length > 0 ? onBoard : joined)].sort((a, b) =>
-        (b.joinedAt ?? "").localeCompare(a.joinedAt ?? ""),
-      )[0] ?? null
-    );
-  }, [state]);
+  const activeRoster = useMemo(() => {
+    if (!state || !rosterId) return null;
+    return state.rosters.find((roster) => roster.id === rosterId) ?? null;
+  }, [rosterId, state]);
 
   if (loading) return <LoadingScreen />;
 
@@ -384,7 +399,7 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
   return (
     <div className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label="Pickle & Chill home">
+        <a className="brand" href="/" aria-label="Pickle & Chill home">
           <span className="brand-ball"><LogoBall size={38} /></span>
           <span className="brand-copy">
             <strong>PICKLE &amp; CHILL</strong>
@@ -393,10 +408,16 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
         </a>
 
         <nav className="main-nav" aria-label="Main navigation">
-          <a href="#rosters">Rosters</a>
-          <a href="#rotation">Live rotation</a>
-          <a href="#players">Players</a>
-          <a href="#top-five-title">Leaderboard</a>
+          {isRosterView ? (
+            <>
+              <a href="#roster-details">Roster details</a>
+              <a href="#rotation">Live rotation</a>
+              <a href="#players">Players</a>
+              <a href="#top-five-title">Leaderboard</a>
+            </>
+          ) : (
+            <a href="#rosters">Rosters</a>
+          )}
         </nav>
 
         <div className="topbar-actions">
@@ -420,251 +441,277 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
       </header>
 
       <main className="page-shell" id="top">
-        <section className="hero">
-          <div className="hero-copy">
-            <div className="eyebrow hero-eyebrow">
-              <span className="eyebrow-ball"><LogoBall size={17} /></span>
-              {isAdmin ? "Pickleball club · Leveling committee" : "Pickleball club · Player view"}
-            </div>
-            <h1>
-              Balanced courts.
-              <br />
-              <span>Better games.</span>
-            </h1>
-            <p className="hero-lede">
-              {isAdmin
-                ? "Rate every player, create scheduled game rosters, build level-matched or Open Rate courts, and keep the leaderboard honest. Everyone gets a game before anyone gets a repeat."
-                : "Browse the scheduled game rosters, reserve your spot, and follow the live rotation. Your registered rate is used automatically for balanced courts."}
-            </p>
-            <div className="hero-actions">
-              {isAdmin ? (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-large"
-                  onClick={() => {
-                    if (stats.totalPlayers < 4) {
-                      setPlayerModal({ mode: "add" });
-                    } else {
-                      document.getElementById("rotation")?.scrollIntoView({ behavior: "smooth" });
-                    }
-                  }}
-                >
-                  {stats.totalPlayers < 4 ? <PlusIcon size={18} /> : <SparklesIcon size={18} />}
-                  {stats.totalPlayers < 4 ? "Build your roster" : "Go to rotation"}
-                  <ArrowUpRightIcon size={17} />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-primary btn-large"
-                  onClick={() => {
-                    document
-                      .getElementById("rosters")
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }}
-                >
-                  <CalendarIcon size={18} />
-                  {openRosterCount > 0 ? "Choose a roster" : "View rosters"}
-                  <ArrowUpRightIcon size={17} />
-                </button>
-              )}
-            </div>
-            <div className="hero-proof">
-              <span><CheckIcon size={14} /> No player on two active courts</span>
-              <span><CheckIcon size={14} /> Level or Open Rate courts</span>
-              <span><CheckIcon size={14} /> Fair play counts</span>
-            </div>
-          </div>
-
-          <div className="night-card">
-            <div className="night-lines" aria-hidden>
-              <span className="night-line-v" />
-              <span className="night-line-h" />
-              <span className="night-line-kitchen" />
-            </div>
-            <div className="night-card-head">
-              <div>
-                <span className="eyebrow eyebrow-light">Live board</span>
-                <h2>{state.activeRound?.scheduled ? "Rotation in play" : "Ready for first serve"}</h2>
+        {!isRosterView ? (
+          <>
+            <section className="hero">
+              <div className="hero-copy">
+                <div className="eyebrow hero-eyebrow">
+                  <span className="eyebrow-ball"><LogoBall size={17} /></span>
+                  {isAdmin ? "Pickleball club · Leveling committee" : "Pickleball club · Player view"}
+                </div>
+                <h1>
+                  Balanced courts.
+                  <br />
+                  <span>Better games.</span>
+                </h1>
+                <p className="hero-lede">
+                  {isAdmin
+                    ? "Rate every player, create scheduled game rosters, build level-matched or Open Rate courts, and keep the leaderboard honest. Everyone gets a game before anyone gets a repeat."
+                    : "Browse the scheduled game rosters, reserve your spot, and follow the live rotation. Your registered rate is used automatically for balanced courts."}
+                </p>
+                <div className="hero-actions">
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-large"
+                      onClick={() => {
+                        if (state.rosters.length === 0) {
+                          setRosterModalOpen(true);
+                        } else {
+                          document
+                            .getElementById("rosters")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                      }}
+                    >
+                      {state.rosters.length === 0 ? (
+                        <PlusIcon size={18} />
+                      ) : (
+                        <CalendarIcon size={18} />
+                      )}
+                      {state.rosters.length === 0 ? "Create your first roster" : "Open a roster"}
+                      <ArrowUpRightIcon size={17} />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-large"
+                      onClick={() => {
+                        document
+                          .getElementById("rosters")
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      }}
+                    >
+                      <CalendarIcon size={18} />
+                      {openRosterCount > 0 ? "Choose a roster" : "View rosters"}
+                      <ArrowUpRightIcon size={17} />
+                    </button>
+                  )}
+                </div>
+                <div className="hero-proof">
+                  <span><CheckIcon size={14} /> No player on two active courts</span>
+                  <span><CheckIcon size={14} /> Level or Open Rate courts</span>
+                  <span><CheckIcon size={14} /> Fair play counts</span>
+                </div>
               </div>
-              <span className="live-chip"><span /> Live</span>
-            </div>
 
-            <div className="night-hero-number">
-              <strong>{stats.totalPlayers}</strong>
-              <span>
-                players
-                <br />
-                on the board
-              </span>
-            </div>
+              <div className="night-card">
+                <div className="night-lines" aria-hidden>
+                  <span className="night-line-v" />
+                  <span className="night-line-h" />
+                  <span className="night-line-kitchen" />
+                </div>
+                <div className="night-card-head">
+                  <div>
+                    <span className="eyebrow eyebrow-light">Live board</span>
+                    <h2>{state.activeRound?.scheduled ? "Rotation in play" : "Ready for first serve"}</h2>
+                  </div>
+                  <span className="live-chip"><span /> Live</span>
+                </div>
 
-            <div className="night-stat-grid">
-              <div>
-                <span>Average rate</span>
-                <strong>{stats.averageRating ? stats.averageRating.toFixed(1) : "—"}</strong>
-              </div>
-              <div>
-                <span>Courts</span>
-                <strong>{stats.gamesAvailable}</strong>
-              </div>
-              <div>
-                <span>Yet to play</span>
-                <strong>{stats.playersYetToPlay}</strong>
-              </div>
-            </div>
-
-            <div className="night-progress">
-              <div className="night-progress-copy">
-                <span>Roster has played</span>
-                <strong>{playedPlayers}/{stats.totalPlayers}</strong>
-              </div>
-              <div className="night-progress-track">
-                <span style={{ width: `${playedPercent}%` }} />
-              </div>
-            </div>
-
-            <div className="night-ball" aria-hidden>
-              <LogoBall size={96} />
-            </div>
-            <span className="night-tag">FAIR PLAY · GOOD GAMES</span>
-          </div>
-        </section>
-
-        <div className="stat-strip">
-          <div className="stat-card">
-            <span className="stat-icon"><UsersIcon size={18} /></span>
-            <div><strong>{stats.totalPlayers}</strong><span>Players rated</span></div>
-          </div>
-          <div className="stat-card">
-            <span className="stat-icon"><TrophyIcon size={18} /></span>
-            <div><strong>{stats.completedMatches}</strong><span>Matches completed</span></div>
-          </div>
-          <div className="stat-card">
-            <span className="stat-icon"><SparklesIcon size={18} /></span>
-            <div><strong>{stats.playersYetToPlay}</strong><span>Awaiting a game</span></div>
-          </div>
-          <div className="stat-card">
-            <span className="stat-icon stat-icon-dark"><LogoBall size={21} /></span>
-            <div><strong>{stats.gamesAvailable}</strong><span>Full level courts</span></div>
-          </div>
-        </div>
-
-        <RosterPanel
-          rosters={state.rosters}
-          isAdmin={isAdmin}
-          onCreate={() => setRosterModalOpen(true)}
-          onJoin={handleJoinRoster}
-          joiningId={joiningRosterId}
-        />
-
-        {!isAdmin ? (
-          <section
-            className={`player-banner ${state.viewer.joined ? "is-joined" : ""} ${
-              activeJoinedRoster ? "has-roster" : ""
-            }`}
-            aria-label="Player access"
-          >
-            <div className="player-banner-copy">
-              <span className="eyebrow">
-                {activeJoinedRoster ? "Your joined roster" : "Player access"}
-              </span>
-              <strong>
-                {state.viewer.joined
-                  ? "You are on this game board"
-                  : openRosterCount > 0
-                    ? "Rosters are open"
-                    : "Waiting for an open roster"}
-              </strong>
-              {activeJoinedRoster ? (
-                <div className="player-banner-roster-line">
-                  <span className="player-banner-roster-name">{activeJoinedRoster.name}</span>
+                <div className="night-hero-number">
+                  <strong>{stats.totalPlayers}</strong>
                   <span>
-                    <CalendarIcon size={13} />
-                    {formatRosterDate(activeJoinedRoster.date)}
-                  </span>
-                  <span>
-                    <ClockIcon size={13} />
-                    {formatRosterTime(activeJoinedRoster.time)}
-                  </span>
-                  <span className="player-banner-roster-ratio">
-                    {activeJoinedRoster.joinedCount}/{activeJoinedRoster.capacity} joined ·{" "}
-                    {activeJoinedRoster.remaining} slot
-                    {activeJoinedRoster.remaining === 1 ? "" : "s"} left
+                    players
+                    <br />
+                    on the board
                   </span>
                 </div>
-              ) : null}
-              <span>{state.viewer.message}</span>
-              <div className="player-banner-meta">
-                <span>Registered rate {state.viewer.rating?.toFixed(1) ?? "—"}</span>
-                {state.viewer.gender ? <span>{genderLabel(state.viewer.gender)}</span> : null}
-                {state.viewer.boardOwnerAlias ? (
-                  <span>Board host: {state.viewer.boardOwnerAlias}</span>
-                ) : null}
-                {openRosterCount > 0 ? (
-                  <span>
-                    {openRosterCount} roster{openRosterCount === 1 ? "" : "s"} with open slots
-                  </span>
-                ) : null}
+
+                <div className="night-stat-grid">
+                  <div>
+                    <span>Average rate</span>
+                    <strong>{stats.averageRating ? stats.averageRating.toFixed(1) : "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Courts</span>
+                    <strong>{stats.gamesAvailable}</strong>
+                  </div>
+                  <div>
+                    <span>Yet to play</span>
+                    <strong>{stats.playersYetToPlay}</strong>
+                  </div>
+                </div>
+
+                <div className="night-progress">
+                  <div className="night-progress-copy">
+                    <span>Roster has played</span>
+                    <strong>{playedPlayers}/{stats.totalPlayers}</strong>
+                  </div>
+                  <div className="night-progress-track">
+                    <span style={{ width: `${playedPercent}%` }} />
+                  </div>
+                </div>
+
+                <div className="night-ball" aria-hidden>
+                  <LogoBall size={96} />
+                </div>
+                <span className="night-tag">FAIR PLAY · GOOD GAMES</span>
+              </div>
+            </section>
+
+            <div className="stat-strip">
+              <div className="stat-card">
+                <span className="stat-icon"><UsersIcon size={18} /></span>
+                <div><strong>{stats.totalPlayers}</strong><span>Players rated</span></div>
+              </div>
+              <div className="stat-card">
+                <span className="stat-icon"><TrophyIcon size={18} /></span>
+                <div><strong>{stats.completedMatches}</strong><span>Matches completed</span></div>
+              </div>
+              <div className="stat-card">
+                <span className="stat-icon"><SparklesIcon size={18} /></span>
+                <div><strong>{stats.playersYetToPlay}</strong><span>Awaiting a game</span></div>
+              </div>
+              <div className="stat-card">
+                <span className="stat-icon stat-icon-dark"><LogoBall size={21} /></span>
+                <div><strong>{stats.gamesAvailable}</strong><span>Full level courts</span></div>
               </div>
             </div>
-            <div className="player-banner-actions">
-              <span className="view-only-chip">
-                <LockIcon size={13} />
-                View-only board
-              </span>
-              <span className={`player-status ${state.viewer.joined ? "is-joined" : ""}`}>
-                {state.viewer.joined ? <CheckIcon size={14} /> : <UsersIcon size={14} />}
-                {state.viewer.joined
-                  ? "Joined"
-                  : openRosterCount > 0
-                    ? "Join a roster"
-                    : "No open slots"}
-              </span>
+
+            <RosterPanel
+              rosters={state.rosters}
+              isAdmin={isAdmin}
+              onCreate={() => setRosterModalOpen(true)}
+            />
+          </>
+        ) : activeRoster ? (
+          <>
+            <RosterDetail
+              roster={activeRoster}
+              isAdmin={isAdmin}
+              joiningId={joiningRosterId}
+              onJoin={handleJoinRoster}
+            />
+
+            {!isAdmin ? (
+              <section
+                className={`player-banner ${activeRoster.joined ? "is-joined" : ""} has-roster`}
+                aria-label="Player access"
+              >
+                <div className="player-banner-copy">
+                  <span className="eyebrow">
+                    {activeRoster.joined ? "Your joined roster" : "Roster review"}
+                  </span>
+                  <strong>
+                    {activeRoster.joined
+                      ? "You are on this game board"
+                      : activeRoster.full
+                        ? "This roster is full"
+                        : "Review this roster before joining"}
+                  </strong>
+                  <div className="player-banner-roster-line">
+                    <span className="player-banner-roster-name">{activeRoster.name}</span>
+                    <span>
+                      <CalendarIcon size={13} />
+                      {formatRosterDate(activeRoster.date)}
+                    </span>
+                    <span>
+                      <ClockIcon size={13} />
+                      {formatRosterTime(activeRoster.time)}
+                    </span>
+                    <span className="player-banner-roster-ratio">
+                      {activeRoster.joinedCount}/{activeRoster.capacity} joined ·{" "}
+                      {activeRoster.remaining} slot
+                      {activeRoster.remaining === 1 ? "" : "s"} left
+                    </span>
+                  </div>
+                  <span>
+                    {activeRoster.joined
+                      ? "Your registered rate is on this board. The admin manages teams, scores, and game settings."
+                      : "Check the roster details above, then join when you are ready. Your registered rate is added to the board automatically."}
+                  </span>
+                  <div className="player-banner-meta">
+                    <span>Registered rate {state.viewer.rating?.toFixed(1) ?? "—"}</span>
+                    {state.viewer.gender ? (
+                      <span>{genderLabel(state.viewer.gender)}</span>
+                    ) : null}
+                    <span>Board host: {activeRoster.ownerAlias}</span>
+                    <span>{activeRoster.remaining} slots left</span>
+                  </div>
+                </div>
+                <div className="player-banner-actions">
+                  <span className="view-only-chip">
+                    <LockIcon size={13} />
+                    View-only board
+                  </span>
+                  <span className={`player-status ${activeRoster.joined ? "is-joined" : ""}`}>
+                    {activeRoster.joined ? <CheckIcon size={14} /> : <UsersIcon size={14} />}
+                    {activeRoster.joined
+                      ? "Joined"
+                      : activeRoster.full
+                        ? "Roster full"
+                        : "Not joined"}
+                  </span>
+                </div>
+              </section>
+            ) : null}
+
+            <div className="content-grid">
+              <div className="main-column">
+                <MatchBoard
+                  players={state.players}
+                  activeRound={state.activeRound}
+                  onGenerate={handleGenerate}
+                  onAddNextLineup={handleAddNextLineup}
+                  onSaveScore={handleSaveScore}
+                  onEditLineup={setLineupMatch}
+                  onAddPlayer={() => setPlayerModal({ mode: "add" })}
+                  onReset={() => setResetGameOpen(true)}
+                  readOnly={!isAdmin}
+                />
+
+                <PlayerRoster
+                  players={state.players}
+                  topPlayerIds={state.topPlayers.map((player) => player.id)}
+                  onAdd={() => setPlayerModal({ mode: "add" })}
+                  canAddPlayer={Boolean(state.activeRound)}
+                  onEdit={(player) => setPlayerModal({ mode: "edit", player })}
+                  onDelete={setDeletePlayer}
+                  onClearAll={() => setClearAllOpen(true)}
+                  canClearAll={
+                    state.players.length > 0 ||
+                    state.stats.completedMatches > 0 ||
+                    Boolean(state.activeRound)
+                  }
+                  onLoadSample={handleLoadSample}
+                  sampleLoading={sampleLoading}
+                  readOnly={!isAdmin}
+                  viewerPlayerId={state.viewer.playerId}
+                />
+              </div>
+
+              <aside className="side-column">
+                <TopFive players={state.topPlayers} />
+                <LevelGuide tiers={state.tiers} total={stats.totalPlayers} />
+                <RecentResults matches={state.recentMatches} />
+              </aside>
             </div>
+          </>
+        ) : (
+          <section className="panel roster-missing" aria-labelledby="roster-missing-title">
+            <span className="eyebrow">Roster unavailable</span>
+            <h1 id="roster-missing-title">Roster not found</h1>
+            <p>
+              This roster may have been removed, or it belongs to a different admin account.
+              Return to the roster list and choose an available game.
+            </p>
+            <Link href="/#rosters" className="btn btn-primary">
+              <ArrowLeftIcon size={16} />
+              Back to rosters
+            </Link>
           </section>
-        ) : null}
-
-        <div className="content-grid">
-          <div className="main-column">
-            <MatchBoard
-              players={state.players}
-              activeRound={state.activeRound}
-              onGenerate={handleGenerate}
-              onAddNextLineup={handleAddNextLineup}
-              onSaveScore={handleSaveScore}
-              onEditLineup={setLineupMatch}
-              onAddPlayer={() => setPlayerModal({ mode: "add" })}
-              onReset={() => setResetGameOpen(true)}
-              readOnly={!isAdmin}
-            />
-
-            <PlayerRoster
-              players={state.players}
-              topPlayerIds={state.topPlayers.map((player) => player.id)}
-              onAdd={() => setPlayerModal({ mode: "add" })}
-              canAddPlayer={Boolean(state.activeRound)}
-              onEdit={(player) => setPlayerModal({ mode: "edit", player })}
-              onDelete={setDeletePlayer}
-              onClearAll={() => setClearAllOpen(true)}
-              canClearAll={
-                state.players.length > 0 ||
-                state.stats.completedMatches > 0 ||
-                Boolean(state.activeRound)
-              }
-              onLoadSample={handleLoadSample}
-              sampleLoading={sampleLoading}
-              readOnly={!isAdmin}
-              viewerPlayerId={state.viewer.playerId}
-            />
-          </div>
-
-          <aside className="side-column">
-            <TopFive players={state.topPlayers} />
-            <LevelGuide tiers={state.tiers} total={stats.totalPlayers} />
-            <RecentResults matches={state.recentMatches} />
-          </aside>
-        </div>
+        )}
 
         <footer className="site-footer">
           <div className="footer-brand">

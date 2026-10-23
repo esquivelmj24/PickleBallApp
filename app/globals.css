@@ -821,6 +821,7 @@ a {
   grid-template-columns: minmax(0, 1fr) 360px;
   gap: 22px;
   align-items: start;
+  margin-top: 22px;
 }
 
 .main-column,
@@ -5037,6 +5038,8 @@ a {
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  color: inherit;
+  text-decoration: none;
   background: linear-gradient(145deg, var(--paper-warm), var(--paper));
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -5047,17 +5050,6 @@ a {
   border-color: var(--line-strong);
   box-shadow: 0 12px 28px rgba(16, 46, 41, 0.07);
   transform: translateY(-2px);
-}
-
-.game-roster-card.is-selected {
-  border-color: var(--forest);
-  box-shadow: 0 0 0 2px rgba(16, 46, 41, 0.13);
-}
-
-@media (min-width: 721px) {
-  .game-rosters-panel:not(.is-admin) .game-roster-card.is-selected {
-    grid-column: 1 / -1;
-  }
 }
 
 .game-roster-card.is-joined {
@@ -5071,6 +5063,7 @@ a {
 
 .game-roster-hit {
   display: flex;
+  flex: 1;
   flex-direction: column;
   gap: 12px;
   width: 100%;
@@ -5083,24 +5076,9 @@ a {
   cursor: pointer;
 }
 
-.game-roster-hit:focus-visible {
+.game-roster-card:focus-visible {
   outline: 2px solid var(--forest);
-  outline-offset: -3px;
-}
-
-.game-rosters-panel.is-admin .game-roster-hit {
-  cursor: default;
-}
-
-.game-rosters-panel.is-admin .game-roster-hit:disabled {
-  color: inherit;
-  opacity: 1;
-}
-
-.game-rosters-panel.is-admin .game-roster-card:hover {
-  border-color: var(--line);
-  box-shadow: none;
-  transform: none;
+  outline-offset: 3px;
 }
 
 .game-roster-topline {
@@ -5252,6 +5230,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  margin-top: auto;
 }
 
 .game-roster-slots {
@@ -5286,115 +5265,6 @@ a {
   color: #9e3524;
   background: #fff0eb;
   border-color: #f4d1c7;
-}
-
-.game-roster-join {
-  display: grid;
-  gap: 11px;
-  margin-top: auto;
-  padding: 13px 18px 16px;
-  background: rgba(221, 244, 91, 0.13);
-  border-top: 1px dashed var(--line);
-  animation: fadeIn 180ms ease both;
-}
-
-.game-roster-card.is-joined .game-roster-join {
-  background: rgba(56, 161, 105, 0.08);
-}
-
-.game-roster-join-main {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 11px;
-  border-top: 1px dashed var(--line);
-}
-
-.game-roster-join-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.game-roster-join-copy strong {
-  color: var(--ink);
-  font-size: 11.5px;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.game-roster-join-copy span {
-  color: var(--muted);
-  font-size: 9.5px;
-  line-height: 1.4;
-}
-
-.game-roster-joined-list {
-  display: grid;
-  gap: 7px;
-}
-
-.game-roster-joined-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: var(--muted);
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.game-roster-joined-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-.game-roster-joined-chip {
-  display: inline-flex;
-  max-width: 100%;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 7px;
-  overflow: hidden;
-  color: var(--ink-soft);
-  background: rgba(255, 253, 247, 0.8);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.game-roster-joined-chip.is-viewer {
-  color: #2f7d4f;
-  background: rgba(56, 161, 105, 0.12);
-  border-color: rgba(56, 161, 105, 0.26);
-}
-
-.game-roster-joined-chip small {
-  color: var(--muted);
-  font-size: 8px;
-  font-weight: 700;
-}
-
-.game-roster-joined-chip.is-viewer small {
-  color: #2f7d4f;
-}
-
-.game-roster-joined-empty {
-  color: var(--muted);
-  font-size: 9.5px;
-  line-height: 1.45;
-}
-
-.game-roster-join .btn {
-  flex-shrink: 0;
 }
 
 .game-roster-empty {
@@ -5448,6 +5318,277 @@ a {
   margin: 14px 2px 0;
   color: var(--muted-light);
   font-size: 9.5px;
+}
+
+/* ---------- Roster details ---------- */
+
+.roster-detail-panel {
+  margin-top: 30px;
+  overflow: hidden;
+}
+
+.roster-detail-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.roster-detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.roster-detail-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.roster-detail-heading-copy {
+  min-width: 0;
+}
+
+.roster-detail-heading h1 {
+  margin: 6px 0 0;
+  color: var(--forest-deep);
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 44px);
+  font-weight: 600;
+  letter-spacing: -0.045em;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.roster-detail-heading p {
+  max-width: 720px;
+  margin: 9px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.roster-detail-ratio {
+  display: grid;
+  flex-shrink: 0;
+  min-width: 132px;
+  justify-items: end;
+  gap: 3px;
+  padding: 13px 17px;
+  color: #fff;
+  background: var(--forest);
+  border-radius: 17px;
+}
+
+.roster-detail-ratio > span {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.roster-detail-ratio strong {
+  color: var(--lime);
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.roster-detail-ratio small {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.roster-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 18px;
+  margin-top: 18px;
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.roster-detail-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.roster-detail-meta svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.roster-detail-progress {
+  height: 9px;
+  margin-top: 14px;
+  overflow: hidden;
+  background: var(--sand-deep);
+  border-radius: 999px;
+}
+
+.roster-detail-progress > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--lime-deep), var(--lime));
+  border-radius: inherit;
+  transition: width 320ms ease;
+}
+
+.roster-detail-players {
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--line);
+}
+
+.roster-detail-players-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.roster-detail-players-head h2 {
+  margin: 4px 0 0;
+  color: var(--forest-deep);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.roster-detail-player-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 9px;
+  margin: 15px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.roster-detail-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  background: var(--paper-warm);
+  border: 1px solid var(--line);
+  border-radius: 13px;
+}
+
+.roster-detail-player.is-viewer {
+  background: rgba(56, 161, 105, 0.09);
+  border-color: rgba(56, 161, 105, 0.3);
+}
+
+.roster-detail-player-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.roster-detail-player-copy strong {
+  color: var(--ink);
+  font-size: 11.5px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.roster-detail-player-copy > span {
+  color: var(--muted);
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.roster-detail-join {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 22px;
+  padding: 16px 18px;
+  background: rgba(221, 244, 91, 0.16);
+  border: 1px solid rgba(16, 46, 41, 0.1);
+  border-radius: 16px;
+}
+
+.roster-detail-join.is-joined {
+  background: rgba(56, 161, 105, 0.08);
+  border-color: rgba(56, 161, 105, 0.24);
+}
+
+.roster-detail-join-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.roster-detail-join-copy strong {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.roster-detail-join-copy span {
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.5;
+}
+
+.roster-detail-join .btn {
+  flex-shrink: 0;
+}
+
+.roster-detail-admin-note {
+  margin-top: 22px;
+  padding: 14px 16px;
+  background: var(--paper-warm);
+  border: 1px dashed var(--line-strong);
+  border-radius: 14px;
+}
+
+.roster-detail-admin-note p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+
+.roster-missing {
+  margin-top: 60px;
+  padding: 48px 25px;
+  text-align: center;
+}
+
+.roster-missing h1 {
+  margin: 8px 0 0;
+  color: var(--forest-deep);
+  font-family: var(--font-display);
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+.roster-missing p {
+  max-width: 520px;
+  margin: 12px auto 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.roster-missing .btn {
+  margin-top: 20px;
 }
 
 /* ---------- Roster modal ---------- */
@@ -5536,12 +5677,25 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .game-roster-join-main {
+  .roster-detail-heading {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .roster-detail-ratio {
+    justify-items: start;
+  }
+
+  .roster-detail-player-list {
+    grid-template-columns: 1fr;
+  }
+
+  .roster-detail-join {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .game-roster-join .btn {
+  .roster-detail-join .btn {
     width: 100%;
   }
 }

@@ -6,7 +6,13 @@ import {
   signInRequiredResponse,
   type SessionUser,
 } from "@/lib/auth";
-import { getDb, type MatchDoc, type PlayerDoc, type UserDoc } from "@/lib/db";
+import {
+  getDb,
+  type MatchDoc,
+  type PlayerDoc,
+  type RosterDoc,
+  type UserDoc,
+} from "@/lib/db";
 import { latestGameOwnerId } from "@/lib/games";
 import { loadRosterSummaries } from "@/lib/rosters";
 import { advanceRoundIfComplete } from "@/lib/rounds";
@@ -116,19 +122,20 @@ async function buildPlayerState(
   db: Db,
   user: SessionUser,
   rosters: Roster[],
+  rosterOwnerId?: ObjectId,
 ): Promise<AppState> {
   const userId = new ObjectId(user.id);
   const [userDoc, playerDoc] = await Promise.all([
     db.collection<UserDoc>("users").findOne({ _id: userId }),
     db
       .collection<PlayerDoc>("players")
-      .find({ userId })
+      .find({ userId, ...(rosterOwnerId ? { ownerId: rosterOwnerId } : {}) })
       .sort({ updatedAt: -1, createdAt: -1 })
       .limit(1)
       .next(),
   ]);
 
-  const ownerId = playerDoc?.ownerId ?? (await latestGameOwnerId(db));
+  const ownerId = rosterOwnerId ?? playerDoc?.ownerId ?? (await latestGameOwnerId(db));
 
   if (!ownerId) {
     return emptyBoardState(
@@ -170,19 +177,37 @@ async function buildPlayerState(
   return buildBoardState(db, ownerId, viewer, rosters);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await getSessionUser();
     if (!user) return signInRequiredResponse();
 
     const db = await getDb();
     const rosters = await loadRosterSummaries(db, user);
+    const rosterIdParam = new URL(request.url).searchParams.get("rosterId");
+    const adminOwnerId = user.role === "admin" ? ownerObjectId(user) : null;
+    let selectedRoster: RosterDoc | null = null;
 
-    if (user.role === "player") {
-      return NextResponse.json(await buildPlayerState(db, user, rosters));
+    if (rosterIdParam && ObjectId.isValid(rosterIdParam)) {
+      const candidate = await db
+        .collection<RosterDoc>("rosters")
+        .findOne({ _id: new ObjectId(rosterIdParam) });
+
+      if (
+        candidate &&
+        (user.role === "player" || candidate.ownerId.equals(adminOwnerId!))
+      ) {
+        selectedRoster = candidate;
+      }
     }
 
-    const ownerId = ownerObjectId(user);
+    if (user.role === "player") {
+      return NextResponse.json(
+        await buildPlayerState(db, user, rosters, selectedRoster?.ownerId),
+      );
+    }
+
+    const ownerId = selectedRoster?.ownerId ?? adminOwnerId!;
 
     // Only the owner's visit may advance their queue. Other admins can never
     // see or change this session.
