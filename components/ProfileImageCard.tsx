@@ -218,7 +218,7 @@ export function ProfileImageCard({
       <div className="profile-card-actions">
         <button
           type="button"
-          className="btn btn-ghost btn-small"
+          className="btn btn-primary"
           onClick={onEditProfile}
           disabled={busy}
         >
