@@ -559,6 +559,7 @@ export function Dashboard({
               isAdmin={isAdmin}
               onCreate={() => setRosterModalOpen(true)}
             />
+            <TopWinRate players={state.topWinRatePlayers} />
           </>
         ) : activeRoster ? (
           <>
@@ -685,7 +686,6 @@ export function Dashboard({
 
               <aside className="side-column">
                 <TopFive players={state.topPlayers} />
-                <TopWinRate players={state.topWinRatePlayers} />
                 <LevelGuide tiers={state.tiers} total={stats.totalPlayers} />
                 <RecentResults matches={state.recentMatches} />
               </aside>
