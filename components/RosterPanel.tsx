@@ -156,7 +156,9 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
                             <span
                               key={member.playerId}
                               className={`game-roster-person ${member.isViewer ? "is-viewer" : ""}`}
-                              title={`${member.name} · ${member.rating.toFixed(1)}`}
+                              title={`${member.name} · ${
+                                member.isNR ? "NR" : member.rating.toFixed(1)
+                              }`}
                             >
                               {member.name}
                               {member.isViewer ? (

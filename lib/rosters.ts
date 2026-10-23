@@ -112,14 +112,15 @@ export async function loadRosterSummaries(
   return rosterDocs.map((roster) => {
     const entries = entriesByRoster.get(roster._id.toString()) ?? [];
     const viewerEntry = viewerId
-      ? entries.find((entry) => entry.userId.equals(viewerId))
+      ? entries.find((entry) => entry.userId?.equals(viewerId))
       : undefined;
     const joinedCount = Math.min(entries.length, roster.capacity);
     const members = entries.map((entry) => ({
       playerId: entry.playerId.toString(),
       name: entry.name,
       rating: entry.rating,
-      isViewer: Boolean(viewerId && entry.userId.equals(viewerId)),
+      isNR: Boolean(entry.isNR),
+      isViewer: Boolean(viewerId && entry.userId?.equals(viewerId)),
       joinedAt: entry.createdAt.toISOString(),
     }));
 

@@ -119,7 +119,7 @@ export function LineupModal({
         </div>
 
         <p className="modal-intro">
-          Swap in any available roster player. Rating bands are not enforced for manual
+          Swap in any available roster player. Rating groups are not enforced for manual
           changes. Players already assigned to another active court are locked until that
           lineup is changed. Players on completed courts are available again.
         </p>
@@ -155,7 +155,7 @@ export function LineupModal({
                               const disabled = Boolean(occupiedCourt) || selectedElsewhere;
                               return (
                                 <option key={player.id} value={player.id} disabled={disabled}>
-                                  {player.name} · {player.rating.toFixed(1)}
+                                  {player.name} · {player.isNR ? "NR" : player.rating.toFixed(1)}
                                   {occupiedCourt ? ` (Court ${occupiedCourt})` : ""}
                                   {selectedElsewhere ? " (selected)" : ""}
                                 </option>
@@ -183,7 +183,7 @@ export function LineupModal({
           <div className="lineup-note">
             <CheckIcon size={16} />
             <span>
-              <strong>Manual override:</strong> mixing rating bands is allowed, and the court
+              <strong>Manual override:</strong> mixing rating groups is allowed, and the court
               will be labeled “Mixed levels” on the board. Changes apply to this rotation only;
               playing records stay untouched.
             </span>

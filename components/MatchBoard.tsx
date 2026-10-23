@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { MAX_COURTS } from "@/lib/constants";
 import { courtLetter, courtName } from "@/lib/courts";
 import { averageRating, playerRestTime } from "@/lib/format";
-import { getLevel, LEVELS } from "@/lib/levels";
+import { ALL_LEVELS, getLevel } from "@/lib/levels";
 import type { AppState, CourtLayout, Match, MatchMode, Player } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import {
@@ -92,9 +92,14 @@ function CourtCard({
   const losingTeam = completed && winningTeam ? (winningTeam === 1 ? 2 : 1) : null;
   const isOpenRate = match.mode === "open";
   const courtPlayers = [...match.team1, ...match.team2];
-  const courtLevels = Array.from(new Set(courtPlayers.map((player) => getLevel(player.rating).key)));
+  const courtLevels = Array.from(
+    new Set(courtPlayers.map((player) => getLevel(player.rating, player.isNR).key)),
+  );
   const mixedLevels = courtLevels.length > 1;
-  const courtLevel = getLevel(courtPlayers[0]?.rating ?? 2);
+  const courtLevel = getLevel(
+    courtPlayers[0]?.rating ?? 2,
+    Boolean(courtPlayers[0]?.isNR),
+  );
   const levelColor = isOpenRate ? "#21618C" : mixedLevels ? "#B06B18" : courtLevel.color;
   const levelSoft = isOpenRate ? "#EAF4FB" : mixedLevels ? "#FFF1DB" : courtLevel.soft;
   const activeCourtName = courtName(match.court, singleCourt);
@@ -172,7 +177,9 @@ function CourtCard({
                   <div className="match-player" key={player.playerId}>
                     <Avatar name={player.name} size="xs" />
                     <span className="match-player-name">{player.name}</span>
-                    <span className="match-player-rating">{player.rating.toFixed(1)}</span>
+                    <span className={`match-player-rating ${player.isNR ? "is-nr" : ""}`}>
+                      {player.isNR ? "NR" : player.rating.toFixed(1)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -297,7 +304,7 @@ export function MatchBoard({
 }: MatchBoardProps) {
   const [mode, setMode] = useState<MatchMode>("level");
   const [layout, setLayout] = useState<CourtLayout>("single");
-  const tierSummary = LEVELS.map((level) => {
+  const tierSummary = ALL_LEVELS.map((level) => {
     const count = players.filter((player) => player.level === level.key).length;
     return {
       ...level,
@@ -439,7 +446,7 @@ export function MatchBoard({
     if (aRest !== bRest) return aRest - bRest;
     return a.name.localeCompare(b.name);
   });
-  const availableTier = LEVELS.map((level) => ({
+  const availableTier = ALL_LEVELS.map((level) => ({
     ...level,
     count: availablePlayers.filter((player) => player.level === level.key).length,
   }))
@@ -466,7 +473,7 @@ export function MatchBoard({
               4 - availablePlayers.length === 1 ? "" : "s"
             } needed for the next group.`
           : activeRound.mode === "level" && !availableTier
-            ? "No available rating band has four players right now."
+            ? "No available rating group has four players right now."
             : `Queues another Next Player group · ${availablePlayers.length} available.`
         : nextCourtNumber === null
           ? `Maximum of ${MAX_COURTS} courts reached. The next rotation reuses the same courts.`
@@ -475,7 +482,7 @@ export function MatchBoard({
                 4 - availablePlayers.length === 1 ? "" : "s"
               } needed for another court.`
             : activeRound.mode === "level" && !availableTier
-              ? "No available rating band has four players right now."
+              ? "No available rating group has four players right now."
               : `Adds ${courtName(nextCourtNumber, false)} · ${availablePlayers.length} available.`;
 
   function handleLayoutChange(nextLayout: CourtLayout) {
@@ -712,7 +719,8 @@ export function MatchBoard({
               ) : (
                 <>
                   <strong>Automatic courts are level-locked.</strong> Beginner plays beginner, low
-                  intermediate plays low intermediate, and high intermediate plays high intermediate.
+                  intermediate plays low intermediate, high intermediate plays high intermediate,
+                  and Not Rated players play together until a rate is set.
                   <span>
                     {layout === "multiple"
                       ? " Fewest games first within each level; first finishers break ties."
@@ -834,12 +842,12 @@ export function MatchBoard({
                     } to start.`
                   : mode === "level"
                     ? closestTier
-                      ? `No rating band has four players yet. Add ${closestTier.shortage} more ${
+                      ? `No rating group has four players yet. Add ${closestTier.shortage} more ${
                           closestTier.label
                         } player${
                           closestTier.shortage === 1 ? "" : "s"
                         }, or switch to Open Rate.`
-                      : "No rating band has four players yet. Adjust a rating or switch to Open Rate."
+                      : "No rating group has four players yet. Adjust a rating or switch to Open Rate."
                     : "Add at least four players to start."}
               </span>
             </div>
@@ -868,7 +876,7 @@ export function MatchBoard({
                 title={
                   !canAutoMatch
                     ? mode === "level"
-                      ? "Add four players in the same rating band, or switch to Open Rate"
+                      ? "Add four players in the same rating group, or switch to Open Rate"
                       : "Add at least four players to start"
                     : "Generate the teams and reveal the court board"
                 }
@@ -942,7 +950,7 @@ export function MatchBoard({
                 ? `Fewest games first for the next group${
                     activeRound?.mode === "open"
                       ? " across all levels."
-                      : " within their level."
+                      : " within their rating group."
                   }`
                 : "Fewest games first for the next rotation; first finishers break ties."
               : "Available for the next rotation."}
@@ -958,7 +966,7 @@ export function MatchBoard({
           <span>
             {activeRound.mode === "open" ? (
               <>
-                <ShuffleIcon size={14} /> Open Rate mixes rating bands
+                <ShuffleIcon size={14} /> Open Rate mixes rating groups
               </>
             ) : (
               <>

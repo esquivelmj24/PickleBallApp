@@ -17,10 +17,11 @@ export function timeAgo(value: string | null): string {
   });
 }
 
-export function averageRating(players: { rating: number }[]): string {
-  if (!players.length) return "—";
-  const total = players.reduce((sum, player) => sum + player.rating, 0);
-  return (total / players.length).toFixed(1);
+export function averageRating(players: { rating: number; isNR?: boolean }[]): string {
+  const rated = players.filter((player) => !player.isNR);
+  if (!rated.length) return "NR";
+  const total = rated.reduce((sum, player) => sum + player.rating, 0);
+  return (total / rated.length).toFixed(1);
 }
 
 /**

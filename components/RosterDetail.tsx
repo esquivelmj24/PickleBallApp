@@ -24,6 +24,7 @@ type RosterDetailProps = {
   onJoin: (roster: Roster) => Promise<void>;
   onEditRoster: () => void;
   onEndRoster: () => void;
+  onEditPlayer?: (playerId: string) => void;
 };
 
 export function RosterDetail({
@@ -33,6 +34,7 @@ export function RosterDetail({
   onJoin,
   onEditRoster,
   onEndRoster,
+  onEditPlayer,
 }: RosterDetailProps) {
   const members = [...roster.members].sort(
     (a, b) =>
@@ -145,7 +147,8 @@ export function RosterDetail({
         {members.length > 0 ? (
           <ul className="roster-detail-player-list">
             {members.map((member) => {
-              const level = getLevel(member.rating);
+              const level = getLevel(member.rating, member.isNR);
+              const rateLabel = member.isNR ? "NR" : member.rating.toFixed(1);
               return (
                 <li
                   key={member.playerId}
@@ -157,9 +160,21 @@ export function RosterDetail({
                       {member.name}
                       {member.isViewer ? <span className="you-badge">You</span> : null}
                     </strong>
-                    <span>
-                      {member.rating.toFixed(1)} · {level.label}
-                    </span>
+                    {isAdmin && onEditPlayer ? (
+                      <button
+                        type="button"
+                        className="member-rate-btn"
+                        onClick={() => onEditPlayer(member.playerId)}
+                        title={`Edit ${member.name}'s rate`}
+                        aria-label={`Edit ${member.name}'s rate`}
+                      >
+                        {rateLabel} · {level.label}
+                      </button>
+                    ) : (
+                      <span>
+                        {rateLabel} · {level.label}
+                      </span>
+                    )}
                   </div>
                 </li>
               );

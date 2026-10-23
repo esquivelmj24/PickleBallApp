@@ -72,9 +72,12 @@ async function buildBoardState(
       }
     : null;
 
-  const averageRating = players.length
+  const ratedPlayers = players.filter((player) => !player.isNR);
+  const averageRating = ratedPlayers.length
     ? Math.round(
-        (players.reduce((total, player) => total + player.rating, 0) / players.length) * 10,
+        (ratedPlayers.reduce((total, player) => total + player.rating, 0) /
+          ratedPlayers.length) *
+          10,
       ) / 10
     : 0;
 
@@ -143,6 +146,7 @@ async function buildPlayerState(
         role: "player",
         alias: user.alias,
         rating: userDoc?.rating,
+        isNR: Boolean(userDoc?.isNR),
         gender: userDoc?.gender,
         joined: false,
         canJoin: false,
@@ -162,6 +166,7 @@ async function buildPlayerState(
     role: "player",
     alias: user.alias,
     rating: userDoc?.rating,
+    isNR: Boolean(userDoc?.isNR),
     gender: userDoc?.gender,
     joined,
     canJoin: !joined && hasProfile,

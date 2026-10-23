@@ -1,4 +1,4 @@
-import { LEVELS } from "@/lib/levels";
+import { ALL_LEVELS } from "@/lib/levels";
 import type { Match, Player, TierCount } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import { ArrowUpRightIcon, MedalIcon, SparklesIcon, TrophyIcon } from "./icons";
@@ -42,7 +42,7 @@ export function TopFive({ players }: { players: Player[] }) {
               <div className="leaderboard-player">
                 <strong>{player.name}</strong>
                 <span>
-                  {player.rating.toFixed(1)} · {player.levelLabel}
+                  {player.isNR ? "NR" : player.rating.toFixed(1)} · {player.levelLabel}
                 </span>
               </div>
               <div className="leaderboard-record">
@@ -74,11 +74,11 @@ export function LevelGuide({ tiers, total }: { tiers: TierCount[]; total: number
           <span className="eyebrow">Rating bands</span>
           <h2 id="level-guide-title">Level key</h2>
         </div>
-        <span className="panel-count">{total} rated</span>
+        <span className="panel-count">{total} players</span>
       </div>
 
       <div className="tier-list">
-        {LEVELS.map((level) => {
+        {ALL_LEVELS.map((level) => {
           const count = tiers.find((tier) => tier.key === level.key)?.count ?? 0;
           const percent = total ? Math.round((count / total) * 100) : 0;
           return (
@@ -87,7 +87,9 @@ export function LevelGuide({ tiers, total }: { tiers: TierCount[]; total: number
                 <span className="level-dot" style={{ background: level.color }} />
                 <strong>{level.label}</strong>
                 <span className="tier-range">
-                  {level.min.toFixed(1)} – {level.max.toFixed(1)}
+                  {level.key === "not-rated"
+                    ? "Unknown rate"
+                    : `${level.min.toFixed(1)} – ${level.max.toFixed(1)}`}
                 </span>
                 <span className="tier-count">{count}</span>
               </div>

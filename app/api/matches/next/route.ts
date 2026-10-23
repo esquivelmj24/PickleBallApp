@@ -91,7 +91,7 @@ export async function POST() {
     if (round.pairings.length === 0) {
       return jsonError(
         mode === "level"
-          ? "No available rating band has four players. Finish the current court, then shuffle a new Open Rate round to mix levels."
+          ? "No available rating group has four players. Finish the current court, then shuffle a new Open Rate round to mix levels."
           : "The next player group could not be built from the available players.",
         409,
       );
@@ -112,11 +112,13 @@ export async function POST() {
         playerId: player._id,
         name: player.name,
         rating: player.rating,
+        isNR: Boolean(player.isNR),
       })),
       team2: pairing.team2.map((player) => ({
         playerId: player._id,
         name: player.name,
         rating: player.rating,
+        isNR: Boolean(player.isNR),
       })),
       team1Score: null,
       team2Score: null,

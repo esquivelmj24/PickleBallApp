@@ -14,13 +14,15 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role | "">("");
   const [rating, setRating] = useState("3.0");
+  const [isNR, setIsNR] = useState(false);
   const [gender, setGender] = useState<Gender | "">("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const isRegister = mode === "register";
   const normalizedRating = normalizeRating(rating);
-  const level = normalizedRating !== null ? getLevel(normalizedRating) : null;
+  const level =
+    normalizedRating !== null ? getLevel(normalizedRating, isNR) : isNR ? getLevel(0, true) : null;
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -32,7 +34,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
     }
 
     if (isRegister && role === "player") {
-      if (normalizeRating(rating) === null) {
+      if (!isNR && normalizeRating(rating) === null) {
         setError("Rate must be between 2.0 and 4.0.");
         return;
       }
@@ -54,7 +56,11 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
                 password,
                 role,
                 ...(role === "player"
-                  ? { rating: normalizeRating(rating), gender }
+                  ? {
+                      rating: normalizeRating(rating) ?? (isNR ? 3.0 : null),
+                      isNR,
+                      gender,
+                    }
                   : {}),
               }
             : { alias, password },
@@ -155,21 +161,35 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         <>
           <label className="auth-field">
             <span>Rate</span>
-            <input
-              type="number"
-              name="rating"
-              value={rating}
-              onChange={(event) => setRating(event.target.value)}
-              min={2}
-              max={4}
-              step="0.1"
-              inputMode="decimal"
-              required
-            />
+            <div className="auth-rate-row">
+              <input
+                type="number"
+                name="rating"
+                value={rating}
+                onChange={(event) => setRating(event.target.value)}
+                min={2}
+                max={4}
+                step="0.1"
+                inputMode="decimal"
+                disabled={isNR}
+                required
+              />
+              <button
+                type="button"
+                className={`nr-toggle ${isNR ? "is-active" : ""}`}
+                aria-pressed={isNR}
+                onClick={() => setIsNR((current) => !current)}
+                title={isNR ? "Use the numeric rate again" : "Register as Not Rated"}
+              >
+                NR
+              </button>
+            </div>
             <small className="auth-field-hint">
-              {level
-                ? `${level.label} · used automatically for balanced matchmaking.`
-                : "Set a rate from 2.0 to 4.0."}
+              {isNR
+                ? "Not Rated · your numeric rate is ignored until the committee sets a band."
+                : level
+                  ? `${level.label} · used automatically for balanced matchmaking.`
+                  : "Set a rate from 2.0 to 4.0, or choose NR."}
             </small>
           </label>
 

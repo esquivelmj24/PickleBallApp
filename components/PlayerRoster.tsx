@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { getLevel, LEVELS, type LevelKey } from "@/lib/levels";
+import { ALL_LEVELS, getLevel, type LevelKey } from "@/lib/levels";
 import type { Player } from "@/lib/types";
 import { Avatar } from "./Avatar";
 import {
@@ -69,7 +69,10 @@ export function PlayerRoster({
       })
       .sort((a, b) => {
         if (sort === "name") return a.name.localeCompare(b.name);
-        if (sort === "rating") return b.rating - a.rating || a.name.localeCompare(b.name);
+        if (sort === "rating") {
+          if (a.isNR !== b.isNR) return a.isNR ? 1 : -1;
+          return b.rating - a.rating || a.name.localeCompare(b.name);
+        }
         if (sort === "wins") return b.wins - a.wins || b.pointDiff - a.pointDiff;
         return b.gamesPlayed - a.gamesPlayed || a.name.localeCompare(b.name);
       });
@@ -159,7 +162,7 @@ export function PlayerRoster({
                 All
                 <span>{players.length}</span>
               </button>
-              {LEVELS.map((level) => {
+              {ALL_LEVELS.map((level) => {
                 const count = players.filter((player) => player.level === level.key).length;
                 return (
                   <button
@@ -208,7 +211,8 @@ export function PlayerRoster({
               </thead>
               <tbody>
                 {filteredPlayers.map((player) => {
-                  const level = getLevel(player.rating);
+                  const level = getLevel(player.rating, player.isNR);
+                  const rateLabel = player.isNR ? "NR" : player.rating.toFixed(1);
                   const rank = topPlayerIds.indexOf(player.id);
                   const isViewer = player.id === viewerPlayerId;
                   return (
@@ -234,7 +238,15 @@ export function PlayerRoster({
                       </td>
                       <td>
                         <div className="rate-cell">
-                          <strong>{player.rating.toFixed(1)}</strong>
+                          <button
+                              type="button"
+                              className={`rate-edit-btn ${player.isNR ? "is-nr" : ""}`}
+                              onClick={() => !readOnly && onEdit(player)}
+                              aria-label={`Edit ${player.name}'s rate`}
+                              title={readOnly ? "View rating" : "Edit this player's rate"}
+                            >
+                              {rateLabel}
+                            </button>
                           <span className="level-pill" style={{ background: level.soft, color: level.color }}>
                             <span className="level-dot" style={{ background: level.color }} />
                             {level.label}

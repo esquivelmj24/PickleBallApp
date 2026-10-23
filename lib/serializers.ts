@@ -1,9 +1,10 @@
 import type { MatchDoc, PlayerDoc } from "./db";
-import { getLevel, LEVELS, type LevelKey } from "./levels";
+import { ALL_LEVELS, getLevel, type LevelKey } from "./levels";
 import type { Match, MatchPlayer, Player } from "./types";
 
 export function serializePlayer(doc: PlayerDoc): Player {
-  const level = getLevel(doc.rating);
+  const isNR = Boolean(doc.isNR);
+  const level = getLevel(doc.rating, isNR);
   const gamesPlayed = doc.gamesPlayed || 0;
   const wins = doc.wins || 0;
   const losses = doc.losses || 0;
@@ -14,6 +15,7 @@ export function serializePlayer(doc: PlayerDoc): Player {
     id: doc._id.toString(),
     name: doc.name,
     rating: doc.rating,
+    isNR,
     level: level.key,
     levelLabel: level.label,
     gamesPlayed,
@@ -32,11 +34,13 @@ function serializeMatchPlayer(player: {
   playerId: { toString(): string };
   name: string;
   rating: number;
+  isNR?: boolean;
 }): MatchPlayer {
   return {
     playerId: player.playerId.toString(),
     name: player.name,
     rating: player.rating,
+    isNR: Boolean(player.isNR),
   };
 }
 
@@ -59,11 +63,11 @@ export function serializeMatch(doc: MatchDoc): Match {
 }
 
 export function levelCounts(players: Player[]) {
-  const keys: LevelKey[] = ["beginner", "low-intermediate", "high-intermediate"];
+  const keys = ALL_LEVELS.map((level) => level.key) as LevelKey[];
 
   return keys.map((key) => ({
     key,
-    label: LEVELS.find((level) => level.key === key)?.label ?? key,
+    label: ALL_LEVELS.find((level) => level.key === key)?.label ?? key,
     count: players.filter((player) => player.level === key).length,
   }));
 }
@@ -77,6 +81,7 @@ export function rankPlayers(players: Player[]): Player[] {
     if (b.wins !== a.wins) return b.wins - a.wins;
     if (b.pointDiff !== a.pointDiff) return b.pointDiff - a.pointDiff;
     if (b.winRate !== a.winRate) return b.winRate - a.winRate;
+    if (a.isNR !== b.isNR) return a.isNR ? 1 : -1;
     if (b.rating !== a.rating) return b.rating - a.rating;
     return a.name.localeCompare(b.name);
   });

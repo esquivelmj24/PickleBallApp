@@ -41,6 +41,7 @@ export async function POST(request: Request) {
     }
 
     let rating: number | undefined;
+    let isNR: boolean | undefined;
     let gender: UserDoc["gender"];
 
     if (role === "player") {
@@ -55,6 +56,7 @@ export async function POST(request: Request) {
       }
 
       rating = normalizedRating;
+      isNR = body.isNR === true;
       gender = normalizedGender;
     }
 
@@ -65,7 +67,7 @@ export async function POST(request: Request) {
       aliasKey: aliasKey(alias),
       passwordHash: hashPassword(password),
       role,
-      ...(role === "player" ? { rating, gender } : {}),
+      ...(role === "player" ? { rating, isNR, gender } : {}),
       createdAt: now,
       updatedAt: now,
     };
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
           id: result.insertedId.toString(),
           alias,
           role,
-          ...(role === "player" ? { rating, gender } : {}),
+          ...(role === "player" ? { rating, isNR, gender } : {}),
         },
       },
       { status: 201 },

@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import type { MatchDoc, PlayerDoc } from "./db";
 import { playerRestTime } from "./format";
-import { getLevel, LEVELS, type LevelKey } from "./levels";
+import { ALL_LEVELS, getLevel, type LevelKey } from "./levels";
 import type { MatchMode } from "./types";
 
 type CourtPairing = {
@@ -46,8 +46,16 @@ function shuffle<T>(items: T[]): T[] {
   return copy;
 }
 
+// Not Rated players have an unknown rate. For Open Rate team balance, use the
+// middle of the rating scale instead of their hidden numeric value.
+const NR_BALANCE_RATING = 3.0;
+
+function balanceRating(player: PlayerDoc): number {
+  return player.isNR ? NR_BALANCE_RATING : player.rating;
+}
+
 function ratingTotal(team: PlayerDoc[]): number {
-  return team.reduce((total, player) => total + player.rating, 0);
+  return team.reduce((total, player) => total + balanceRating(player), 0);
 }
 
 function pairKey(a: { toString(): string }, b: { toString(): string }): string {
@@ -329,8 +337,10 @@ export function finishOrderPriority(previousMatches: MatchDoc[]): Map<string, nu
 }
 
 export function levelCourtCapacity(players: PlayerDoc[]): number {
-  return LEVELS.reduce((total, level) => {
-    const count = players.filter((player) => getLevel(player.rating).key === level.key).length;
+  return ALL_LEVELS.reduce((total, level) => {
+    const count = players.filter(
+      (player) => getLevel(player.rating, player.isNR).key === level.key,
+    ).length;
     return total + Math.floor(count / 4);
   }, 0);
 }
@@ -343,17 +353,19 @@ function buildLevelPairings(
 ): CourtPairing[] {
   const pools = new Map<LevelKey, PlayerDoc[]>();
 
-  for (const level of LEVELS) {
+  for (const level of ALL_LEVELS) {
     pools.set(
       level.key,
       fairOrder(
-        players.filter((player) => getLevel(player.rating).key === level.key),
+        players.filter(
+          (player) => getLevel(player.rating, player.isNR).key === level.key,
+        ),
         priorityOrder,
       ),
     );
   }
 
-  const tiers = LEVELS.map((level) => {
+  const tiers = ALL_LEVELS.map((level) => {
     const pool = pools.get(level.key) ?? [];
     return {
       ...level,
@@ -433,9 +445,10 @@ function buildOpenPairings(
  * Automatic matchmaking has two modes:
  *
  * Level mode:
- * 1. Split the roster into the three rating bands.
- * 2. A court can only be built from four players in the SAME band.
- * 3. Within each band, prioritize the fewest games played and longest rest.
+ * 1. Split the roster into rating groups: Beginner, Low Intermediate, High
+ *    Intermediate, and Not Rated.
+ * 2. A court can only be built from four players in the SAME group.
+ * 3. Within each group, prioritize the fewest games played and longest rest.
  *
  * Open rate mode:
  * 1. Ignore rating bands and build courts from the full roster.

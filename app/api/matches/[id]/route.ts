@@ -90,6 +90,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         playerId: player._id,
         name: player.name,
         rating: player.rating,
+        isNR: Boolean(player.isNR),
       };
     };
 

@@ -1,8 +1,14 @@
 import { MongoServerError, ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
-import { jsonError } from "@/lib/api";
+import { jsonError, nameKey } from "@/lib/api";
 import { playerAccessRequiredResponse, requirePlayer } from "@/lib/auth";
-import { getDb, type RosterDoc, type RosterEntryDoc, type UserDoc } from "@/lib/db";
+import {
+  getDb,
+  type PlayerDoc,
+  type RosterDoc,
+  type RosterEntryDoc,
+  type UserDoc,
+} from "@/lib/db";
 import { joinOwnerBoard } from "@/lib/player-pool";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +58,51 @@ export async function POST(_request: Request, context: RouteContext) {
       });
     }
 
+    // An admin may have already added this person by name. Link that manual
+    // membership to the account instead of counting them twice.
+    const matchingPlayer = await db.collection<PlayerDoc>("players").findOne({
+      ownerId: roster.ownerId,
+      nameKey: nameKey(userDoc.alias),
+    });
+
+    if (matchingPlayer) {
+      if (matchingPlayer.userId && !matchingPlayer.userId.equals(userId)) {
+        return jsonError("That player name is already linked to another account.", 409);
+      }
+
+      const manualEntry = await entries.findOne({
+        rosterId,
+        playerId: matchingPlayer._id,
+      });
+
+      if (manualEntry) {
+        if (manualEntry.userId && !manualEntry.userId.equals(userId)) {
+          return jsonError("That player name is already linked to another account.", 409);
+        }
+
+        const { player } = await joinOwnerBoard(db, userDoc, roster.ownerId);
+        await entries.updateOne(
+          { _id: manualEntry._id },
+          {
+            $set: {
+              userId,
+              name: player.name,
+              rating: player.rating,
+              isNR: Boolean(player.isNR),
+            },
+          },
+        );
+
+        const joinedCount = await entries.countDocuments({ rosterId });
+        return NextResponse.json({
+          ok: true,
+          alreadyJoined: true,
+          joinedCount: Math.min(joinedCount, roster.capacity),
+          capacity: roster.capacity,
+        });
+      }
+    }
+
     // Reserve a slot in the roster document first. The conditional update is the
     // atomic capacity gate, so two players cannot both take the final slot.
     const reserved = await db.collection<RosterDoc>("rosters").findOneAndUpdate(
@@ -80,6 +131,40 @@ export async function POST(_request: Request, context: RouteContext) {
     try {
       const { player } = await joinOwnerBoard(db, userDoc, roster.ownerId);
 
+      // Guard against another request creating the same board membership while
+      // this one was reserving a slot.
+      const existingPlayerEntry = await entries.findOne({
+        rosterId,
+        playerId: player._id,
+      });
+
+      if (existingPlayerEntry) {
+        await db
+          .collection<RosterDoc>("rosters")
+          .updateOne({ _id: rosterId }, { $inc: { joinedCount: -1 } })
+          .catch(() => undefined);
+
+        await entries.updateOne(
+          { _id: existingPlayerEntry._id },
+          {
+            $set: {
+              userId,
+              name: player.name,
+              rating: player.rating,
+              isNR: Boolean(player.isNR),
+            },
+          },
+        );
+
+        const joinedCount = await entries.countDocuments({ rosterId });
+        return NextResponse.json({
+          ok: true,
+          alreadyJoined: true,
+          joinedCount: Math.min(joinedCount, roster.capacity),
+          capacity: roster.capacity,
+        });
+      }
+
       await entries.insertOne({
         _id: new ObjectId(),
         rosterId,
@@ -88,6 +173,7 @@ export async function POST(_request: Request, context: RouteContext) {
         playerId: player._id,
         name: player.name,
         rating: player.rating,
+        isNR: Boolean(player.isNR),
         createdAt: new Date(),
       });
 

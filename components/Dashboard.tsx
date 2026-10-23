@@ -145,15 +145,33 @@ export function Dashboard({
     setToast({ message, tone });
   }
 
-  async function handlePlayerSubmit(payload: { name: string; rating: number }) {
+  async function handlePlayerSubmit(payload: {
+    name: string;
+    rating: number;
+    isNR: boolean;
+  }) {
     const editing = playerModal?.mode === "edit" ? playerModal.player : null;
     await apiRequest(editing ? `/api/players/${editing.id}` : "/api/players", {
       method: editing ? "PATCH" : "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify(
+        editing
+          ? payload
+          : {
+              ...payload,
+              rosterId:
+                activeRoster && !activeRoster.ended ? activeRoster.id : undefined,
+            },
+      ),
     });
 
     setPlayerModal(null);
-    showToast(editing ? `${payload.name} updated.` : `${payload.name} added to the roster.`);
+    showToast(
+      editing
+        ? `${payload.name} updated.`
+        : activeRoster && !activeRoster.ended
+          ? `${payload.name} added and joined this roster.`
+          : `${payload.name} added to the roster.`,
+    );
     await loadState();
   }
 
@@ -551,6 +569,10 @@ export function Dashboard({
               onJoin={handleJoinRoster}
               onEditRoster={() => setEditRosterOpen(true)}
               onEndRoster={() => setEndRosterOpen(true)}
+              onEditPlayer={(playerId) => {
+                const player = state.players.find((entry) => entry.id === playerId);
+                if (player) setPlayerModal({ mode: "edit", player });
+              }}
             />
 
             {!isAdmin ? (
@@ -597,7 +619,12 @@ export function Dashboard({
                       : "Check the roster details above, then join when you are ready. Your registered rate is added to the board automatically."}
                   </span>
                   <div className="player-banner-meta">
-                    <span>Registered rate {state.viewer.rating?.toFixed(1) ?? "—"}</span>
+                    <span>
+                      Registered rate{" "}
+                      {state.viewer.isNR
+                        ? "NR"
+                        : state.viewer.rating?.toFixed(1) ?? "—"}
+                    </span>
                     {state.viewer.gender ? (
                       <span>{genderLabel(state.viewer.gender)}</span>
                     ) : null}

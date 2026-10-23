@@ -41,7 +41,7 @@ export async function POST(request: Request) {
         alias: user.alias,
         role,
         ...(role === "player"
-          ? { rating: user.rating, gender: user.gender }
+          ? { rating: user.rating, isNR: Boolean(user.isNR), gender: user.gender }
           : {}),
       },
     });

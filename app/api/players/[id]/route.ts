@@ -2,7 +2,12 @@ import { MongoServerError, ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
 import { cleanName, jsonError, nameKey, readBody } from "@/lib/api";
 import { ownerObjectId, requireAdmin, unauthorizedResponse } from "@/lib/auth";
-import { getDb, type PlayerDoc } from "@/lib/db";
+import {
+  getDb,
+  type PlayerDoc,
+  type RosterDoc,
+  type RosterEntryDoc,
+} from "@/lib/db";
 import { normalizeRating } from "@/lib/levels";
 import { serializePlayer } from "@/lib/serializers";
 
@@ -31,6 +36,8 @@ export async function PATCH(request: Request, context: RouteContext) {
     const name = body.name === undefined ? existing.name : cleanName(body.name);
     const rating =
       body.rating === undefined ? existing.rating : normalizeRating(body.rating);
+    const isNR =
+      body.isNR === undefined ? Boolean(existing.isNR) : body.isNR === true;
 
     if (!name) return jsonError("Enter a player name between 2 and 40 characters.");
     if (rating === null) return jsonError("Rating must be between 2.0 and 4.0.");
@@ -40,6 +47,7 @@ export async function PATCH(request: Request, context: RouteContext) {
       name,
       nameKey: nameKey(name),
       rating,
+      isNR,
       updatedAt: now,
     };
 
@@ -50,8 +58,10 @@ export async function PATCH(request: Request, context: RouteContext) {
       $set: {
         "team1.$[player].name": name,
         "team1.$[player].rating": rating,
+        "team1.$[player].isNR": isNR,
         "team2.$[player].name": name,
         "team2.$[player].rating": rating,
+        "team2.$[player].isNR": isNR,
         updatedAt: now,
       },
     };
@@ -68,6 +78,12 @@ export async function PATCH(request: Request, context: RouteContext) {
         snapshotUpdate,
         { arrayFilters },
       ),
+      db
+        .collection<RosterEntryDoc>("rosterEntries")
+        .updateMany(
+          { ownerId, playerId },
+          { $set: { name, rating, isNR } },
+        ),
     ]);
 
     return NextResponse.json(
@@ -76,6 +92,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         name,
         nameKey: nameKey(name),
         rating,
+        isNR,
         updatedAt: now,
       }),
     );
@@ -112,8 +129,31 @@ export async function DELETE(_request: Request, context: RouteContext) {
       );
     }
 
-    const result = await db.collection("players").deleteOne({ _id: playerId, ownerId });
-    if (!result.deletedCount) return jsonError("Player not found.", 404);
+    const player = await db
+      .collection<PlayerDoc>("players")
+      .findOne({ _id: playerId, ownerId });
+    if (!player) return jsonError("Player not found.", 404);
+
+    const entries = await db
+      .collection<RosterEntryDoc>("rosterEntries")
+      .find({ ownerId, playerId })
+      .toArray();
+
+    await db.collection<RosterEntryDoc>("rosterEntries").deleteMany({ ownerId, playerId });
+    await db.collection<PlayerDoc>("players").deleteOne({ _id: playerId, ownerId });
+
+    // Keep each roster's stored capacity counter in step with the memberships
+    // that were just removed.
+    await Promise.all(
+      entries.map((entry) =>
+        db
+          .collection<RosterDoc>("rosters")
+          .updateOne(
+            { _id: entry.rosterId, joinedCount: { $gt: 0 } },
+            { $inc: { joinedCount: -1 }, $set: { updatedAt: new Date() } },
+          ),
+      ),
+    );
 
     return NextResponse.json({ ok: true });
   } catch (error) {

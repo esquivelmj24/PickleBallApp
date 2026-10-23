@@ -32,6 +32,7 @@ export async function joinOwnerBoard(
   const now = new Date();
   const key = nameKey(userDoc.alias);
   const sameName = await players.findOne({ ownerId, nameKey: key });
+  const isNR = Boolean(userDoc.isNR);
 
   if (sameName) {
     if (sameName.userId && !sameName.userId.equals(userId)) {
@@ -44,6 +45,7 @@ export async function joinOwnerBoard(
         $set: {
           userId,
           rating: userDoc.rating,
+          isNR,
           gender: userDoc.gender,
           updatedAt: now,
         },
@@ -61,6 +63,7 @@ export async function joinOwnerBoard(
     name: userDoc.alias,
     nameKey: key,
     rating: userDoc.rating,
+    isNR,
     gender: userDoc.gender,
     gamesPlayed: 0,
     wins: 0,

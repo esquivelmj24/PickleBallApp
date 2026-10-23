@@ -5,6 +5,7 @@ export type Player = {
   id: string;
   name: string;
   rating: number;
+  isNR: boolean;
   level: LevelKey;
   levelLabel: string;
   gamesPlayed: number;
@@ -22,6 +23,7 @@ export type MatchPlayer = {
   playerId: string;
   name: string;
   rating: number;
+  isNR: boolean;
 };
 
 export type MatchMode = "level" | "open";
@@ -48,6 +50,7 @@ export type RosterMember = {
   playerId: string;
   name: string;
   rating: number;
+  isNR: boolean;
   isViewer: boolean;
   joinedAt: string;
 };
@@ -82,6 +85,7 @@ export type Viewer = {
   role: "admin" | "player";
   alias: string;
   rating?: number;
+  isNR?: boolean;
   gender?: Gender;
   joined: boolean;
   canJoin: boolean;

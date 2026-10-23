@@ -42,6 +42,14 @@ export async function getDb(): Promise<Db> {
       // player account is unique per admin board rather than globally unique.
       await db.collection("players").dropIndex("userId_1").catch(() => undefined);
 
+      // Admin-added roster members have no user account, so membership entries
+      // need an optional userId. Recreate the old unique index as a partial
+      // index and identify manual entries by their board player instead.
+      await db
+        .collection("rosterEntries")
+        .dropIndex("rosterId_1_userId_1")
+        .catch(() => undefined);
+
       await Promise.all([
         db.collection("players").createIndex({ ownerId: 1, nameKey: 1 }, { unique: true }),
         db.collection("players").createIndex({ ownerId: 1, name: 1 }),
@@ -71,9 +79,17 @@ export async function getDb(): Promise<Db> {
         }),
         db.collection("rosterEntries").createIndex(
           { rosterId: 1, userId: 1 },
+          {
+            unique: true,
+            partialFilterExpression: { userId: { $exists: true } },
+          },
+        ),
+        db.collection("rosterEntries").createIndex(
+          { rosterId: 1, playerId: 1 },
           { unique: true },
         ),
         db.collection("rosterEntries").createIndex({ ownerId: 1, userId: 1 }),
+        db.collection("rosterEntries").createIndex({ ownerId: 1, playerId: 1 }),
         db.collection("rosterEntries").createIndex({ userId: 1, createdAt: -1 }),
       ]);
 
@@ -100,6 +116,7 @@ export type UserDoc = {
   passwordHash: string;
   role: "admin" | "player";
   rating?: number;
+  isNR?: boolean;
   gender?: Gender;
   avatarUrl?: string | null;
   createdAt: Date;
@@ -114,6 +131,7 @@ export type PlayerDoc = {
   gender?: Gender;
   nameKey: string;
   rating: number;
+  isNR?: boolean;
   gamesPlayed: number;
   wins: number;
   losses: number;
@@ -128,6 +146,7 @@ export type MatchPlayerDoc = {
   playerId: ObjectId;
   name: string;
   rating: number;
+  isNR?: boolean;
 };
 
 export type MatchDoc = {
@@ -150,8 +169,8 @@ export type MatchDoc = {
 
 /**
  * A scheduled game created by an admin. The joined count is the number of
- * player accounts that selected and joined this roster; capacity is the
- * advertised number of available slots.
+ * players on the roster, including admin-added players without accounts;
+ * capacity is the advertised number of available slots.
  */
 export type RosterDoc = {
   _id: ObjectId;
@@ -172,10 +191,12 @@ export type RosterEntryDoc = {
   _id: ObjectId;
   rosterId: ObjectId;
   ownerId: ObjectId;
-  userId: ObjectId;
+  /** Optional because an admin can add a board player without an account. */
+  userId?: ObjectId;
   playerId: ObjectId;
   name: string;
   rating: number;
+  isNR?: boolean;
   createdAt: Date;
 };
 

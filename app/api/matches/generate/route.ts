@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     if (capacity < 1) {
       return jsonError(
-        "No rating band has four players yet. Switch to the Open rate tab to shuffle players across levels.",
+        "No rating group has four players yet. Switch to the Open rate tab to shuffle players across levels.",
         409,
       );
     }
@@ -122,11 +122,13 @@ export async function POST(request: Request) {
         playerId: player._id,
         name: player.name,
         rating: player.rating,
+        isNR: Boolean(player.isNR),
       })),
       team2: pairing.team2.map((player) => ({
         playerId: player._id,
         name: player.name,
         rating: player.rating,
+        isNR: Boolean(player.isNR),
       })),
       team1Score: null,
       team2Score: null,
