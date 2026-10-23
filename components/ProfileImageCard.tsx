@@ -65,9 +65,11 @@ async function resizeProfileImage(file: File): Promise<string> {
 export function ProfileImageCard({
   alias,
   role,
+  onEditProfile,
 }: {
   alias: string;
   role: "admin" | "player";
+  onEditProfile?: () => void;
 }) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -214,6 +216,15 @@ export function ProfileImageCard({
       </div>
 
       <div className="profile-card-actions">
+        <button
+          type="button"
+          className="btn btn-ghost btn-small"
+          onClick={onEditProfile}
+          disabled={busy}
+        >
+          Edit Profile
+        </button>
+
         <button
           type="button"
           className="btn btn-primary btn-small profile-upload-button"

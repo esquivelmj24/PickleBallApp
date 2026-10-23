@@ -11,6 +11,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { LineupModal } from "./LineupModal";
 import { MatchBoard } from "./MatchBoard";
 import { PlayerModal } from "./PlayerModal";
+import { ProfileModal } from "./ProfileModal";
 import { PlayerRoster } from "./PlayerRoster";
 import { ProfileImageCard } from "./ProfileImageCard";
 import { RosterDetail } from "./RosterDetail";
@@ -75,6 +76,7 @@ export function Dashboard({
   const [toast, setToast] = useState<ToastState>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
   const [rosterModalOpen, setRosterModalOpen] = useState(false);
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
   const [editRosterOpen, setEditRosterOpen] = useState(false);
   const [joiningRosterId, setJoiningRosterId] = useState<string | null>(null);
 
@@ -222,7 +224,25 @@ export function Dashboard({
     );
   }
 
-  async function handleLogout() {
+    async function handleProfileSubmit(payload: {
+    alias: string;
+    rating: number;
+    isNR: boolean;
+    gender: string;
+  }) {
+    try {
+      await apiRequest(`/api/profile/update`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+      setProfileModalOpen(false);
+      showToast("Profile updated successfully.");
+      await loadState();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not update profile.", "error");
+    }
+  }
+async function handleLogout() {
     try {
       await fetch("/api/auth/logout", { method: "POST" });
     } finally {
@@ -551,7 +571,7 @@ export function Dashboard({
                 </div>
               </div>
 
-              <ProfileImageCard alias={alias} role={role} />
+              <ProfileImageCard alias={alias} role={role} onEditProfile={() => setProfileModalOpen(true)} />
             </section>
 
             <RosterPanel
@@ -718,6 +738,15 @@ export function Dashboard({
           </div>
         </footer>
       </main>
+
+      
+      {profileModalOpen && (
+        <ProfileModal
+          user={state.viewer}
+          onClose={() => setProfileModalOpen(false)}
+          onSubmit={handleProfileSubmit}
+        />
+      )}
 
       {isAdmin && playerModal ? (
         <PlayerModal
