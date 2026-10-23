@@ -84,8 +84,10 @@ export async function POST(request: Request) {
         remaining: capacity,
         full: false,
         joined: false,
+        joinedAt: null,
         ownerAlias: admin.alias,
         createdAt: now.toISOString(),
+        members: [],
       },
       { status: 201 },
     );

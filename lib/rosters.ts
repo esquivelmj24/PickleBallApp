@@ -72,44 +72,43 @@ export async function loadRosterSummaries(
       rosterDocs.map((roster) => [roster.ownerId.toString(), roster.ownerId]),
     ).values(),
   ];
+  const viewerId = user.role === "player" ? new ObjectId(user.id) : null;
 
-  const [owners, countRows, joinedEntries] = await Promise.all([
+  const [owners, entryDocs] = await Promise.all([
     db
       .collection<UserDoc>("users")
       .find({ _id: { $in: ownerIds } })
       .toArray(),
     entriesCollection
-      .aggregate<{ _id: ObjectId; count: number }>([
-        { $match: { rosterId: { $in: rosterIds } } },
-        { $group: { _id: "$rosterId", count: { $sum: 1 } } },
-      ])
+      .find({ rosterId: { $in: rosterIds } })
+      .sort({ createdAt: 1, name: 1 })
       .toArray(),
-    user.role === "player"
-      ? entriesCollection
-          .find({
-            userId: new ObjectId(user.id),
-            rosterId: { $in: rosterIds },
-          })
-          .project<{ rosterId: ObjectId }>({ rosterId: 1 })
-          .toArray()
-      : Promise.resolve([] as Array<{ rosterId: ObjectId }>),
   ]);
 
   const ownerAliases = new Map(
     owners.map((owner) => [owner._id.toString(), owner.alias]),
   );
-  const counts = new Map(
-    countRows.map((row) => [row._id.toString(), row.count]),
-  );
-  const joinedIds = new Set(
-    joinedEntries.map((entry) => entry.rosterId.toString()),
-  );
+  const entriesByRoster = new Map<string, RosterEntryDoc[]>();
+  for (const entry of entryDocs) {
+    const key = entry.rosterId.toString();
+    const current = entriesByRoster.get(key) ?? [];
+    current.push(entry);
+    entriesByRoster.set(key, current);
+  }
 
   return rosterDocs.map((roster) => {
-    const joinedCount = Math.min(
-      counts.get(roster._id.toString()) ?? 0,
-      roster.capacity,
-    );
+    const entries = entriesByRoster.get(roster._id.toString()) ?? [];
+    const viewerEntry = viewerId
+      ? entries.find((entry) => entry.userId.equals(viewerId))
+      : undefined;
+    const joinedCount = Math.min(entries.length, roster.capacity);
+    const members = entries.map((entry) => ({
+      playerId: entry.playerId.toString(),
+      name: entry.name,
+      rating: entry.rating,
+      isViewer: Boolean(viewerId && entry.userId.equals(viewerId)),
+      joinedAt: entry.createdAt.toISOString(),
+    }));
 
     return {
       id: roster._id.toString(),
@@ -120,9 +119,11 @@ export async function loadRosterSummaries(
       joinedCount,
       remaining: Math.max(0, roster.capacity - joinedCount),
       full: joinedCount >= roster.capacity,
-      joined: joinedIds.has(roster._id.toString()),
+      joined: Boolean(viewerEntry),
+      joinedAt: viewerEntry ? viewerEntry.createdAt.toISOString() : null,
       ownerAlias: ownerAliases.get(roster.ownerId.toString()) ?? "Admin",
       createdAt: roster.createdAt.toISOString(),
+      members,
     };
   });
 }

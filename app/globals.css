@@ -4523,10 +4523,53 @@ a {
   border-color: rgba(56, 161, 105, 0.36);
 }
 
+.player-banner.has-roster {
+  background: linear-gradient(135deg, rgba(221, 244, 91, 0.14), var(--paper));
+}
+
 .player-banner-copy {
   display: grid;
   gap: 4px;
   min-width: 0;
+}
+
+.player-banner-roster-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px 12px;
+  margin: 1px 0 3px;
+  padding: 7px 10px;
+  color: var(--ink-soft);
+  background: rgba(221, 244, 91, 0.2);
+  border: 1px solid rgba(16, 46, 41, 0.1);
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.player-banner-roster-line > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.player-banner-roster-line svg {
+  flex-shrink: 0;
+  color: var(--muted);
+}
+
+.player-banner-roster-name {
+  color: var(--forest-deep);
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.player-banner-roster-ratio {
+  margin-left: auto;
+  color: #2f7d4f;
 }
 
 .player-banner-copy strong {
@@ -4937,6 +4980,10 @@ a {
   .player-banner-actions {
     justify-content: flex-start;
   }
+
+  .player-banner-roster-ratio {
+    margin-left: 0;
+  }
 }
 
 /* ---------- Game rosters ---------- */
@@ -5137,6 +5184,63 @@ a {
   background: linear-gradient(90deg, var(--forest-mid), var(--forest));
 }
 
+.game-roster-people {
+  display: flex;
+  min-height: 20px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.game-roster-person {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  overflow: hidden;
+  color: var(--ink-soft);
+  background: rgba(16, 46, 41, 0.05);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-roster-person.is-viewer {
+  color: #2f7d4f;
+  background: rgba(56, 161, 105, 0.12);
+  border-color: rgba(56, 161, 105, 0.26);
+}
+
+.game-roster-person.is-more {
+  color: var(--muted);
+  background: transparent;
+  border-style: dashed;
+  font-weight: 700;
+}
+
+.game-roster-person-you {
+  flex-shrink: 0;
+  padding: 1px 4px;
+  color: #2f7d4f;
+  background: rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  font-size: 7px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.game-roster-people-empty {
+  color: var(--muted-light);
+  font-size: 9px;
+  font-style: italic;
+}
+
 .game-roster-footer {
   display: flex;
   align-items: center;
@@ -5179,10 +5283,8 @@ a {
 }
 
 .game-roster-join {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  gap: 11px;
   margin-top: auto;
   padding: 13px 18px 16px;
   background: rgba(221, 244, 91, 0.13);
@@ -5192,6 +5294,13 @@ a {
 
 .game-roster-card.is-joined .game-roster-join {
   background: rgba(56, 161, 105, 0.08);
+}
+
+.game-roster-join-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .game-roster-join-copy {
@@ -5211,6 +5320,75 @@ a {
   color: var(--muted);
   font-size: 9.5px;
   line-height: 1.4;
+}
+
+.game-roster-joined-list {
+  display: grid;
+  gap: 7px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.game-roster-joined-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.game-roster-joined-chips {
+  display: flex;
+  max-height: 98px;
+  flex-wrap: wrap;
+  gap: 5px;
+  overflow: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.game-roster-joined-chip {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  overflow: hidden;
+  color: var(--ink-soft);
+  background: rgba(255, 253, 247, 0.8);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-roster-joined-chip.is-viewer {
+  color: #2f7d4f;
+  background: rgba(56, 161, 105, 0.12);
+  border-color: rgba(56, 161, 105, 0.26);
+}
+
+.game-roster-joined-chip small {
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.game-roster-joined-chip.is-viewer small {
+  color: #2f7d4f;
+}
+
+.game-roster-joined-empty {
+  color: var(--muted);
+  font-size: 9.5px;
+  line-height: 1.45;
 }
 
 .game-roster-join .btn {
@@ -5356,7 +5534,7 @@ a {
     grid-template-columns: 1fr;
   }
 
-  .game-roster-join {
+  .game-roster-join-main {
     align-items: stretch;
     flex-direction: column;
   }

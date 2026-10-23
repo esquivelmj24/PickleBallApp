@@ -44,6 +44,14 @@ export type Match = {
   completedAt: string | null;
 };
 
+export type RosterMember = {
+  playerId: string;
+  name: string;
+  rating: number;
+  isViewer: boolean;
+  joinedAt: string;
+};
+
 export type Roster = {
   id: string;
   name: string;
@@ -54,8 +62,10 @@ export type Roster = {
   remaining: number;
   full: boolean;
   joined: boolean;
+  joinedAt: string | null;
   ownerAlias: string;
   createdAt: string;
+  members: RosterMember[];
 };
 
 export type TierCount = {

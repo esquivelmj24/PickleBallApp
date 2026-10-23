@@ -202,8 +202,8 @@ Until the first result is entered, the top five are ordered by committee rating.
 ### Player access
 
 - Players see every scheduled game roster, whether or not they have joined one. The player page also shows the board they joined, or the most recently active admin board before joining.
-- Rosters display the name, date, time, host alias, joined/capacity ratio, progress bar, and remaining slots. The ratio is derived from roster memberships and refreshes automatically.
-- Players select a roster card to reveal its **Join this roster** button. They can view the live rotation, court lineups, roster, leaderboard, and recent results.
+- Rosters display the name, date, time, host alias, joined/capacity ratio, progress bar, remaining slots, and the names of joined players. The signed-in player's own entry is marked, and the ratio is derived from roster memberships and refreshes automatically.
+- Players select a roster card to reveal its **Join this roster** button and the full joined-player list. After joining, the player banner names the joined roster with its date, time, and ratio above the current rotation, players & ratings, leaderboard, level key, and recent results cards.
 - Players cannot create, edit, or delete rosters, players, matches, or scores. Those controls are removed from the player interface, and admin API routes reject player sessions.
 - **Join this roster** is the player write action. It uses the account's registered alias and rate, links a same-name board entry when one exists, creates a new player entry otherwise, and reserves one roster slot. Join is idempotent, and the capacity check is atomic so the final slot cannot be taken twice. Repeated joins return the current ratio instead of creating a duplicate membership.
 - If no admin board or roster exists yet, the player sees an empty waiting state until an admin schedules a game.

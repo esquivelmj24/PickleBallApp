@@ -92,6 +92,14 @@ export function RosterPanel({
                 100,
                 Math.round((roster.joinedCount / roster.capacity) * 100),
               );
+              const orderedMembers = [...roster.members].sort(
+                (a, b) =>
+                  Number(b.isViewer) - Number(a.isViewer) ||
+                  b.joinedAt.localeCompare(a.joinedAt) ||
+                  a.name.localeCompare(b.name),
+              );
+              const visibleMembers = orderedMembers.slice(0, 5);
+              const hiddenMemberCount = orderedMembers.length - visibleMembers.length;
               const cardClasses = [
                 "game-roster-card",
                 selected ? "is-selected" : "",
@@ -142,6 +150,38 @@ export function RosterPanel({
                       <span style={{ width: `${progress}%` }} />
                     </span>
 
+                    <span className="game-roster-people">
+                      {orderedMembers.length > 0 ? (
+                        <>
+                          {visibleMembers.map((member) => (
+                            <span
+                              key={member.playerId}
+                              className={`game-roster-person ${member.isViewer ? "is-viewer" : ""}`}
+                              title={`${member.name} · ${member.rating.toFixed(1)}`}
+                            >
+                              {member.name}
+                              {member.isViewer ? (
+                                <span className="game-roster-person-you">you</span>
+                              ) : null}
+                            </span>
+                          ))}
+                          {hiddenMemberCount > 0 ? (
+                            <span
+                              className="game-roster-person is-more"
+                              title={orderedMembers
+                                .slice(visibleMembers.length)
+                                .map((member) => member.name)
+                                .join(", ")}
+                            >
+                              +{hiddenMemberCount} more
+                            </span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span className="game-roster-people-empty">No players joined yet</span>
+                      )}
+                    </span>
+
                     <span className="game-roster-footer">
                       <span className="game-roster-slots">
                         {roster.full
@@ -165,43 +205,74 @@ export function RosterPanel({
 
                   {!isAdmin && selected ? (
                     <div className="game-roster-join">
-                      <div className="game-roster-join-copy">
-                        <strong>
-                          {roster.joined
-                            ? "Your spot is reserved"
-                            : roster.full
-                              ? "This roster is full"
-                              : "Reserve your spot"}
-                        </strong>
-                        <span>
-                          {roster.joined
-                            ? `${roster.joinedCount}/${roster.capacity} players joined · ${roster.remaining} slots remain`
-                            : roster.full
-                              ? "Choose another scheduled roster to join."
-                              : `${roster.remaining} of ${roster.capacity} slots remain for this game.`}
-                        </span>
+                      <div className="game-roster-join-main">
+                        <div className="game-roster-join-copy">
+                          <strong>
+                            {roster.joined
+                              ? "Your spot is reserved"
+                              : roster.full
+                                ? "This roster is full"
+                                : "Reserve your spot"}
+                          </strong>
+                          <span>
+                            {roster.joined
+                              ? `${roster.joinedCount}/${roster.capacity} players joined · ${roster.remaining} slots remain`
+                              : roster.full
+                                ? "Choose another scheduled roster to join."
+                                : `${roster.remaining} of ${roster.capacity} slots remain for this game.`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className={`btn ${roster.joined || roster.full ? "btn-outline" : "btn-primary"} btn-small`}
+                          onClick={() => void onJoin(roster)}
+                          disabled={roster.joined || roster.full || joiningId === roster.id}
+                        >
+                          {joiningId === roster.id ? (
+                            <span className="spinner spinner-light" />
+                          ) : roster.joined ? (
+                            <CheckIcon size={15} />
+                          ) : (
+                            <PlusIcon size={15} />
+                          )}
+                          {joiningId === roster.id
+                            ? "Joining…"
+                            : roster.joined
+                              ? "Joined"
+                              : roster.full
+                                ? "Roster full"
+                                : "Join this roster"}
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        className={`btn ${roster.joined || roster.full ? "btn-outline" : "btn-primary"} btn-small`}
-                        onClick={() => void onJoin(roster)}
-                        disabled={roster.joined || roster.full || joiningId === roster.id}
-                      >
-                        {joiningId === roster.id ? (
-                          <span className="spinner spinner-light" />
-                        ) : roster.joined ? (
-                          <CheckIcon size={15} />
+
+                      <div className="game-roster-joined-list">
+                        <div className="game-roster-joined-head">
+                          <span>Players joined</span>
+                          <span>
+                            {roster.joinedCount}/{roster.capacity}
+                          </span>
+                        </div>
+                        {orderedMembers.length > 0 ? (
+                          <div className="game-roster-joined-chips">
+                            {orderedMembers.map((member) => (
+                              <span
+                                key={member.playerId}
+                                className={`game-roster-joined-chip ${member.isViewer ? "is-viewer" : ""}`}
+                              >
+                                {member.name}
+                                {member.isViewer ? (
+                                  <span className="game-roster-person-you">you</span>
+                                ) : null}
+                                <small>{member.rating.toFixed(1)}</small>
+                              </span>
+                            ))}
+                          </div>
                         ) : (
-                          <PlusIcon size={15} />
+                          <span className="game-roster-joined-empty">
+                            No players joined yet. Be the first to reserve a spot.
+                          </span>
                         )}
-                        {joiningId === roster.id
-                          ? "Joining…"
-                          : roster.joined
-                            ? "Joined"
-                            : roster.full
-                              ? "Roster full"
-                              : "Join this roster"}
-                      </button>
+                      </div>
                     </div>
                   ) : null}
                 </article>

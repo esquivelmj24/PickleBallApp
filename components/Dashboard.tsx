@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { genderLabel } from "@/lib/constants";
 import { courtDisplayName } from "@/lib/courts";
+import { formatRosterDate, formatRosterTime } from "@/lib/roster-config";
 import type { AppState, CourtLayout, Match, MatchMode, Player, Roster } from "@/lib/types";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { LineupModal } from "./LineupModal";
@@ -18,6 +19,7 @@ import {
   ArrowUpRightIcon,
   CalendarIcon,
   CheckIcon,
+  ClockIcon,
   LockIcon,
   LogoBall,
   PlusIcon,
@@ -341,6 +343,19 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
     return lineupSingleCourt ? "Court" : courtDisplayName(lineupMatch.court);
   }, [lineupMatch, lineupQueued, lineupSingleCourt]);
 
+  const activeJoinedRoster = useMemo(() => {
+    if (!state) return null;
+    const joined = state.rosters.filter((roster) => roster.joined && roster.joinedAt);
+    const onBoard = joined.filter(
+      (roster) => roster.ownerAlias === state.viewer.boardOwnerAlias,
+    );
+    return (
+      [...(onBoard.length > 0 ? onBoard : joined)].sort((a, b) =>
+        (b.joinedAt ?? "").localeCompare(a.joinedAt ?? ""),
+      )[0] ?? null
+    );
+  }, [state]);
+
   if (loading) return <LoadingScreen />;
 
   if (!state) {
@@ -545,11 +560,15 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
 
         {!isAdmin ? (
           <section
-            className={`player-banner ${state.viewer.joined ? "is-joined" : ""}`}
+            className={`player-banner ${state.viewer.joined ? "is-joined" : ""} ${
+              activeJoinedRoster ? "has-roster" : ""
+            }`}
             aria-label="Player access"
           >
             <div className="player-banner-copy">
-              <span className="eyebrow">Player access</span>
+              <span className="eyebrow">
+                {activeJoinedRoster ? "Your joined roster" : "Player access"}
+              </span>
               <strong>
                 {state.viewer.joined
                   ? "You are on this game board"
@@ -557,6 +576,24 @@ export function Dashboard({ alias, role }: { alias: string; role: "admin" | "pla
                     ? "Rosters are open"
                     : "Waiting for an open roster"}
               </strong>
+              {activeJoinedRoster ? (
+                <div className="player-banner-roster-line">
+                  <span className="player-banner-roster-name">{activeJoinedRoster.name}</span>
+                  <span>
+                    <CalendarIcon size={13} />
+                    {formatRosterDate(activeJoinedRoster.date)}
+                  </span>
+                  <span>
+                    <ClockIcon size={13} />
+                    {formatRosterTime(activeJoinedRoster.time)}
+                  </span>
+                  <span className="player-banner-roster-ratio">
+                    {activeJoinedRoster.joinedCount}/{activeJoinedRoster.capacity} joined ·{" "}
+                    {activeJoinedRoster.remaining} slot
+                    {activeJoinedRoster.remaining === 1 ? "" : "s"} left
+                  </span>
+                </div>
+              ) : null}
               <span>{state.viewer.message}</span>
               <div className="player-banner-meta">
                 <span>Registered rate {state.viewer.rating?.toFixed(1) ?? "—"}</span>
