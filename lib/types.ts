@@ -55,6 +55,7 @@ export type RosterMember = {
 export type Roster = {
   id: string;
   name: string;
+  location: string;
   date: string;
   startTime: string;
   endTime: string;

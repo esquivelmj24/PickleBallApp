@@ -12,6 +12,7 @@ import {
   loadRosterSummaries,
   normalizeRosterCapacity,
   validateRosterDate,
+  validateRosterLocation,
   validateRosterName,
   validateRosterTime,
 } from "@/lib/rosters";
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
 
     const body = await readBody(request);
     const name = validateRosterName(body.name);
+    const location = validateRosterLocation(body.location);
     const scheduledDate = validateRosterDate(body.date);
     const scheduledTime = validateRosterTime(body.startTime ?? body.time);
     const scheduledEndTime = validateRosterTime(body.endTime);
@@ -47,6 +49,9 @@ export async function POST(request: Request) {
 
     if (!name) {
       return jsonError("Roster name must be 2–60 characters and include a letter or number.");
+    }
+    if (!location) {
+      return jsonError("Location must be 2–100 characters and include a letter or number.");
     }
     if (!scheduledDate) {
       return jsonError("Choose a valid scheduled date.");
@@ -70,6 +75,7 @@ export async function POST(request: Request) {
     const doc: Omit<RosterDoc, "_id"> = {
       ownerId: ownerObjectId(admin),
       name,
+      location,
       scheduledDate,
       scheduledTime,
       scheduledEndTime,
@@ -89,6 +95,7 @@ export async function POST(request: Request) {
       created ?? {
         id: result.insertedId.toString(),
         name,
+        location,
         date: scheduledDate,
         startTime: scheduledTime,
         endTime: scheduledEndTime,

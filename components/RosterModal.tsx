@@ -10,6 +10,7 @@ import { AlertIcon, XIcon } from "./icons";
 
 export type RosterFormValues = {
   name: string;
+  location: string;
   date: string;
   startTime: string;
   endTime: string;
@@ -29,6 +30,7 @@ function todayValue(): string {
 
 export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
   const [name, setName] = useState("");
+  const [location, setLocation] = useState("");
   const [date, setDate] = useState(todayValue);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -56,6 +58,19 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
     const trimmedName = name.trim();
     if (trimmedName.length < 2) {
       setError("Enter a roster name with at least 2 characters.");
+      return;
+    }
+    const trimmedLocation = location.trim().replace(/\s+/g, " ");
+    if (trimmedLocation.length < 2) {
+      setError("Enter the location for this roster.");
+      return;
+    }
+    if (trimmedLocation.length > 100) {
+      setError("Location must be 100 characters or fewer.");
+      return;
+    }
+    if (!/[a-zA-Z0-9]/.test(trimmedLocation)) {
+      setError("Location must include a letter or number.");
       return;
     }
     if (!date) {
@@ -91,6 +106,7 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
     try {
       await onSubmit({
         name: trimmedName,
+        location: trimmedLocation,
         date,
         startTime,
         endTime,
@@ -135,8 +151,9 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
         </div>
 
         <p className="modal-intro">
-          Set the date, start and end times, and number of player slots. Players will see the
-          roster on their page and can reserve a spot until it is full or you end the transaction.
+          Set the date, location, start and end times, and number of player slots. Players will see
+          the roster on their page and can reserve a spot until it is full or you end the
+          transaction.
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -151,6 +168,19 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
               placeholder="Friday Night Pickle"
               maxLength={60}
               autoFocus
+            />
+          </div>
+
+          <div className="field-group">
+            <label htmlFor="roster-location">Location</label>
+            <input
+              id="roster-location"
+              className="text-input"
+              type="text"
+              value={location}
+              onChange={(event) => setLocation(event.target.value)}
+              placeholder="e.g. Riverside Pickleball Courts"
+              maxLength={100}
             />
           </div>
 

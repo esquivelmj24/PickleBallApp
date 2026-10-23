@@ -11,6 +11,7 @@ import {
   CheckIcon,
   ClockIcon,
   LockIcon,
+  MapPinIcon,
   PlusIcon,
   UsersIcon,
 } from "./icons";
@@ -81,13 +82,13 @@ export function RosterDetail({
           <p>
             {isAdmin
               ? roster.ended
-                ? "This transaction has ended. The roster is closed to players, but its joined-player list and board history remain available."
+                ? "This transaction has ended and has been removed from the roster list."
                 : "Review the joined players, then use the game board below to prepare the rotation."
               : roster.ended
                 ? "This roster has ended and is no longer accepting players."
                 : roster.joined
                   ? "Your spot is reserved. Review the players and follow the live rotation below."
-                  : "Review the date, time, and joined players before deciding whether to join."}
+                  : "Review the location, date, time, and joined players before deciding whether to join."}
           </p>
         </div>
         <div
@@ -106,6 +107,12 @@ export function RosterDetail({
           <CalendarIcon size={15} />
           {formatRosterDate(roster.date)}
         </span>
+        {roster.location ? (
+          <span className="roster-detail-location">
+            <MapPinIcon size={15} />
+            {roster.location}
+          </span>
+        ) : null}
         <span>
           <ClockIcon size={15} />
           {formatRosterTimeRange(roster.startTime, roster.endTime)}
@@ -222,8 +229,8 @@ export function RosterDetail({
             <span className="eyebrow">Admin controls</span>
             <p>
               {roster.ended
-                ? "This transaction is ended and hidden from player roster lists. The game board below remains available for reference."
-                : "The game board and Players & ratings sections are available below. End the transaction when the roster should stop accepting players."}
+                ? "This transaction has ended and has been removed from the roster list."
+                : "The game board and Players & ratings sections are available below. End the transaction when the roster should stop accepting players; you will return to the roster list."}
             </p>
           </div>
           {roster.ended ? (

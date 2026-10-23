@@ -101,6 +101,7 @@ export type UserDoc = {
   role: "admin" | "player";
   rating?: number;
   gender?: Gender;
+  avatarUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -156,6 +157,7 @@ export type RosterDoc = {
   _id: ObjectId;
   ownerId: ObjectId;
   name: string;
+  location?: string;
   scheduledDate: string;
   scheduledTime: string;
   scheduledEndTime?: string;

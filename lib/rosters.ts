@@ -33,6 +33,16 @@ export function validateRosterDate(value: unknown): string | null {
   return date;
 }
 
+export function validateRosterLocation(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+
+  const location = value.trim().replace(/\s+/g, " ");
+  if (location.length < 2 || location.length > 100) return null;
+  if (!/[a-zA-Z0-9]/.test(location)) return null;
+
+  return location;
+}
+
 export function validateRosterTime(value: unknown): string | null {
   if (typeof value !== "string") return null;
 
@@ -60,7 +70,7 @@ export async function loadRosterSummaries(
 
   const query =
     user.role === "admin"
-      ? { ownerId: new ObjectId(user.id) }
+      ? { ownerId: new ObjectId(user.id), endedAt: null }
       : { endedAt: null };
   const rosterDocs = await rostersCollection
     .find(query)
@@ -116,6 +126,7 @@ export async function loadRosterSummaries(
     return {
       id: roster._id.toString(),
       name: roster.name,
+      location: roster.location ?? "",
       date: roster.scheduledDate,
       startTime: roster.scheduledTime,
       endTime: roster.scheduledEndTime ?? "",

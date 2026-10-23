@@ -9,6 +9,7 @@ import {
   CheckIcon,
   ClockIcon,
   LockIcon,
+  MapPinIcon,
   PlusIcon,
   UsersIcon,
 } from "./icons";
@@ -36,8 +37,8 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
             <h2 id="game-rosters-title">Game rosters</h2>
             <p className="game-rosters-lede">
               {isAdmin
-                ? "Create scheduled games, then open a roster to manage its players, match setup, and rotation."
-                : "Open a roster to review its date, time, and joined players on a dedicated page before deciding whether to join."}
+                ? "Create scheduled games with a location, then open a roster to manage its players, match setup, and rotation."
+                : "Open a roster to review its location, date, time, and joined players on a dedicated page before deciding whether to join."}
             </p>
           </div>
         </div>
@@ -63,7 +64,7 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
             <strong>No rosters scheduled yet</strong>
             <p>
               {isAdmin
-                ? "Create the first roster with a date, time, and player capacity."
+                ? "Create the first roster with a location, date, time, and player capacity."
                 : "An admin has not scheduled a game yet. Check back soon."}
             </p>
           </div>
@@ -126,6 +127,12 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
                         <CalendarIcon size={14} />
                         {formatRosterDate(roster.date)}
                       </span>
+                      {roster.location ? (
+                        <span className="game-roster-location">
+                          <MapPinIcon size={14} />
+                          {roster.location}
+                        </span>
+                      ) : null}
                       <span>
                         <ClockIcon size={14} />
                         {formatRosterTimeRange(roster.startTime, roster.endTime)}
@@ -219,7 +226,7 @@ export function RosterPanel({ rosters, isAdmin, onCreate }: RosterPanelProps) {
 
           <p className="game-rosters-footnote">
             {isAdmin
-              ? "Open a roster to access the game board and Players & ratings. Use End Transaction to close sign-ups without deleting the roster history."
+              ? "Open a roster to access the game board and Players & ratings. Use End Transaction to close sign-ups and remove the roster from the list."
               : "Open any roster to review its details and joined players. Joining is available on the roster details page."}
           </p>
         </>

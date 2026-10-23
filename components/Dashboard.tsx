@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { genderLabel } from "@/lib/constants";
 import { courtDisplayName } from "@/lib/courts";
@@ -11,6 +12,7 @@ import { LineupModal } from "./LineupModal";
 import { MatchBoard } from "./MatchBoard";
 import { PlayerModal } from "./PlayerModal";
 import { PlayerRoster } from "./PlayerRoster";
+import { ProfileImageCard } from "./ProfileImageCard";
 import { RosterDetail } from "./RosterDetail";
 import { RosterModal, type RosterFormValues } from "./RosterModal";
 import { RosterPanel } from "./RosterPanel";
@@ -25,9 +27,8 @@ import {
   ClockIcon,
   LockIcon,
   LogoBall,
+  MapPinIcon,
   PlusIcon,
-  SparklesIcon,
-  TrophyIcon,
   UsersIcon,
 } from "./icons";
 
@@ -61,6 +62,7 @@ export function Dashboard({
 }) {
   const isAdmin = role === "admin";
   const isRosterView = Boolean(rosterId);
+  const router = useRouter();
   const [state, setState] = useState<AppState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -307,7 +309,7 @@ export function Dashboard({
     setRosterModalOpen(false);
     await loadState();
     showToast(
-      `${created.name} scheduled for ${created.date} · 0/${created.capacity} joined.`,
+      `${created.name} scheduled for ${created.date} at ${created.location} · 0/${created.capacity} joined.`,
     );
     window.setTimeout(() => {
       document.getElementById("rosters")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -317,10 +319,11 @@ export function Dashboard({
   async function handleEndRoster() {
     if (!activeRoster) return;
 
+    const endedName = activeRoster.name;
     await apiRequest(`/api/rosters/${activeRoster.id}/end`, { method: "POST" });
     setEndRosterOpen(false);
-    await loadState();
-    showToast(`${activeRoster.name} ended. It is no longer available to players.`);
+    showToast(`${endedName} ended and removed from the roster list.`);
+    router.replace("/");
   }
 
   async function handleJoinRoster(roster: Roster) {
@@ -402,8 +405,6 @@ export function Dashboard({
   }
 
   const { stats } = state;
-  const playedPlayers = stats.totalPlayers - stats.playersYetToPlay;
-  const playedPercent = stats.totalPlayers ? Math.round((playedPlayers / stats.totalPlayers) * 100) : 0;
   const openRosterCount = state.rosters.filter((roster) => !roster.full).length;
 
   return (
@@ -515,79 +516,8 @@ export function Dashboard({
                 </div>
               </div>
 
-              <div className="night-card">
-                <div className="night-lines" aria-hidden>
-                  <span className="night-line-v" />
-                  <span className="night-line-h" />
-                  <span className="night-line-kitchen" />
-                </div>
-                <div className="night-card-head">
-                  <div>
-                    <span className="eyebrow eyebrow-light">Live board</span>
-                    <h2>{state.activeRound?.scheduled ? "Rotation in play" : "Ready for first serve"}</h2>
-                  </div>
-                  <span className="live-chip"><span /> Live</span>
-                </div>
-
-                <div className="night-hero-number">
-                  <strong>{stats.totalPlayers}</strong>
-                  <span>
-                    players
-                    <br />
-                    on the board
-                  </span>
-                </div>
-
-                <div className="night-stat-grid">
-                  <div>
-                    <span>Average rate</span>
-                    <strong>{stats.averageRating ? stats.averageRating.toFixed(1) : "—"}</strong>
-                  </div>
-                  <div>
-                    <span>Courts</span>
-                    <strong>{stats.gamesAvailable}</strong>
-                  </div>
-                  <div>
-                    <span>Yet to play</span>
-                    <strong>{stats.playersYetToPlay}</strong>
-                  </div>
-                </div>
-
-                <div className="night-progress">
-                  <div className="night-progress-copy">
-                    <span>Roster has played</span>
-                    <strong>{playedPlayers}/{stats.totalPlayers}</strong>
-                  </div>
-                  <div className="night-progress-track">
-                    <span style={{ width: `${playedPercent}%` }} />
-                  </div>
-                </div>
-
-                <div className="night-ball" aria-hidden>
-                  <LogoBall size={96} />
-                </div>
-                <span className="night-tag">FAIR PLAY · GOOD GAMES</span>
-              </div>
+              <ProfileImageCard alias={alias} role={role} />
             </section>
-
-            <div className="stat-strip">
-              <div className="stat-card">
-                <span className="stat-icon"><UsersIcon size={18} /></span>
-                <div><strong>{stats.totalPlayers}</strong><span>Players rated</span></div>
-              </div>
-              <div className="stat-card">
-                <span className="stat-icon"><TrophyIcon size={18} /></span>
-                <div><strong>{stats.completedMatches}</strong><span>Matches completed</span></div>
-              </div>
-              <div className="stat-card">
-                <span className="stat-icon"><SparklesIcon size={18} /></span>
-                <div><strong>{stats.playersYetToPlay}</strong><span>Awaiting a game</span></div>
-              </div>
-              <div className="stat-card">
-                <span className="stat-icon stat-icon-dark"><LogoBall size={21} /></span>
-                <div><strong>{stats.gamesAvailable}</strong><span>Full level courts</span></div>
-              </div>
-            </div>
 
             <RosterPanel
               rosters={state.rosters}
@@ -627,6 +557,12 @@ export function Dashboard({
                       <CalendarIcon size={13} />
                       {formatRosterDate(activeRoster.date)}
                     </span>
+                    {activeRoster.location ? (
+                      <span>
+                        <MapPinIcon size={13} />
+                        {activeRoster.location}
+                      </span>
+                    ) : null}
                     <span>
                       <ClockIcon size={13} />
                       {formatRosterTimeRange(activeRoster.startTime, activeRoster.endTime)}
@@ -714,8 +650,8 @@ export function Dashboard({
             <span className="eyebrow">Roster unavailable</span>
             <h1 id="roster-missing-title">Roster not found</h1>
             <p>
-              This roster may have been removed, or it belongs to a different admin account.
-              Return to the roster list and choose an available game.
+              This roster may have ended, been removed, or belong to a different admin
+              account. Return to the roster list and choose an available game.
             </p>
             <Link href="/#rosters" className="btn btn-primary">
               <ArrowLeftIcon size={16} />
@@ -798,7 +734,7 @@ export function Dashboard({
       {isAdmin && endRosterOpen && activeRoster ? (
         <ConfirmDialog
           title={`End ${activeRoster.name}?`}
-          message="This ends the roster transaction and removes it from player roster lists. No one else can join, but the joined-player list, board, and history stay available to you."
+          message="This ends the roster transaction and removes it from the roster list. No one else can join. The roster history is kept but will no longer appear in the list."
           confirmLabel="End Transaction"
           cancelLabel="Keep roster open"
           workingLabel="Ending…"
