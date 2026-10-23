@@ -12,6 +12,7 @@ import {
   ClockIcon,
   LockIcon,
   MapPinIcon,
+  PencilIcon,
   PlusIcon,
   UsersIcon,
 } from "./icons";
@@ -21,6 +22,7 @@ type RosterDetailProps = {
   isAdmin: boolean;
   joiningId: string | null;
   onJoin: (roster: Roster) => Promise<void>;
+  onEditRoster: () => void;
   onEndRoster: () => void;
 };
 
@@ -29,6 +31,7 @@ export function RosterDetail({
   isAdmin,
   joiningId,
   onJoin,
+  onEditRoster,
   onEndRoster,
 }: RosterDetailProps) {
   const members = [...roster.members].sort(
@@ -230,7 +233,7 @@ export function RosterDetail({
             <p>
               {roster.ended
                 ? "This transaction has ended and has been removed from the roster list."
-                : "The game board and Players & ratings sections are available below. End the transaction when the roster should stop accepting players; you will return to the roster list."}
+                : "Edit the roster name, location, date, or times. The game board and Players & ratings sections are available below. End the transaction when the roster should stop accepting players."}
             </p>
           </div>
           {roster.ended ? (
@@ -239,10 +242,16 @@ export function RosterDetail({
               Ended
             </span>
           ) : (
-            <button type="button" className="btn btn-danger btn-small" onClick={onEndRoster}>
-              <LockIcon size={15} />
-              End Transaction
-            </button>
+            <div className="roster-detail-admin-actions">
+              <button type="button" className="btn btn-outline btn-small" onClick={onEditRoster}>
+                <PencilIcon size={15} />
+                Edit roster
+              </button>
+              <button type="button" className="btn btn-danger btn-small" onClick={onEndRoster}>
+                <LockIcon size={15} />
+                End Transaction
+              </button>
+            </div>
           )}
         </div>
       )}

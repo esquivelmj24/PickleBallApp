@@ -18,6 +18,8 @@ export type RosterFormValues = {
 };
 
 type RosterModalProps = {
+  mode?: "create" | "edit";
+  initialValues?: RosterFormValues;
   onClose: () => void;
   onSubmit: (payload: RosterFormValues) => Promise<void>;
 };
@@ -28,13 +30,19 @@ function todayValue(): string {
   return local.toISOString().slice(0, 10);
 }
 
-export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
-  const [name, setName] = useState("");
-  const [location, setLocation] = useState("");
-  const [date, setDate] = useState(todayValue);
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [capacity, setCapacity] = useState("20");
+export function RosterModal({
+  mode = "create",
+  initialValues,
+  onClose,
+  onSubmit,
+}: RosterModalProps) {
+  const isEdit = mode === "edit";
+  const [name, setName] = useState(initialValues?.name ?? "");
+  const [location, setLocation] = useState(initialValues?.location ?? "");
+  const [date, setDate] = useState(initialValues?.date ?? todayValue);
+  const [startTime, setStartTime] = useState(initialValues?.startTime ?? "");
+  const [endTime, setEndTime] = useState(initialValues?.endTime ?? "");
+  const [capacity, setCapacity] = useState(String(initialValues?.capacity ?? 20));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -114,7 +122,11 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
       });
     } catch (submitError) {
       setError(
-        submitError instanceof Error ? submitError.message : "Could not create the roster.",
+        submitError instanceof Error
+          ? submitError.message
+          : isEdit
+            ? "Could not save the roster."
+            : "Could not create the roster.",
       );
       setSaving(false);
     }
@@ -136,8 +148,8 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
         <div className="modal-accent" />
         <div className="modal-head">
           <div>
-            <span className="eyebrow">Schedule a game</span>
-            <h2 id="roster-modal-title">Create a roster</h2>
+            <span className="eyebrow">{isEdit ? "Roster details" : "Schedule a game"}</span>
+            <h2 id="roster-modal-title">{isEdit ? "Edit roster" : "Create a roster"}</h2>
           </div>
           <button
             className="icon-btn"
@@ -151,9 +163,9 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
         </div>
 
         <p className="modal-intro">
-          Set the date, location, start and end times, and number of player slots. Players will see
-          the roster on their page and can reserve a spot until it is full or you end the
-          transaction.
+          {isEdit
+            ? "Update the roster name, location, date, and times. Players will see the changes immediately."
+            : "Set the date, location, start and end times, and number of player slots. Players will see the roster on their page and can reserve a spot until it is full or you end the transaction."}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -217,42 +229,48 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
             </div>
           </div>
 
-          <div className="field-group">
-            <label htmlFor="roster-capacity">Number of players</label>
-            <div className="capacity-manual-row">
-              <input
-                id="roster-capacity"
-                className="text-input capacity-input"
-                type="number"
-                inputMode="numeric"
-                min={ROSTER_CAPACITY_MIN}
-                max={ROSTER_CAPACITY_MAX}
-                step={1}
-                value={capacity}
-                onChange={(event) => setCapacity(event.target.value)}
-              />
-              <span className="capacity-unit">players max</span>
-            </div>
-            <div className="capacity-presets" aria-label="Quick capacity presets">
-              {ROSTER_CAPACITIES.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  className={`capacity-chip ${
-                    Number(capacity) === option ? "is-selected" : ""
-                  }`}
-                  aria-pressed={Number(capacity) === option}
-                  onClick={() => setCapacity(String(option))}
-                >
-                  {option}
-                </button>
-              ))}
-            </div>
+          {isEdit ? (
             <span className="field-hint">
-              Enter any number from {ROSTER_CAPACITY_MIN} to {ROSTER_CAPACITY_MAX}, or choose a
-              quick preset. The roster shows a ratio such as 1/{capacity || "N"}.
+              The existing player capacity of {capacity} stays unchanged.
             </span>
-          </div>
+          ) : (
+            <div className="field-group">
+              <label htmlFor="roster-capacity">Number of players</label>
+              <div className="capacity-manual-row">
+                <input
+                  id="roster-capacity"
+                  className="text-input capacity-input"
+                  type="number"
+                  inputMode="numeric"
+                  min={ROSTER_CAPACITY_MIN}
+                  max={ROSTER_CAPACITY_MAX}
+                  step={1}
+                  value={capacity}
+                  onChange={(event) => setCapacity(event.target.value)}
+                />
+                <span className="capacity-unit">players max</span>
+              </div>
+              <div className="capacity-presets" aria-label="Quick capacity presets">
+                {ROSTER_CAPACITIES.map((option) => (
+                  <button
+                    key={option}
+                    type="button"
+                    className={`capacity-chip ${
+                      Number(capacity) === option ? "is-selected" : ""
+                    }`}
+                    aria-pressed={Number(capacity) === option}
+                    onClick={() => setCapacity(String(option))}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+              <span className="field-hint">
+                Enter any number from {ROSTER_CAPACITY_MIN} to {ROSTER_CAPACITY_MAX}, or choose a
+                quick preset. The roster shows a ratio such as 1/{capacity || "N"}.
+              </span>
+            </div>
+          )}
 
           {error ? (
             <div className="form-error" role="alert">
@@ -272,7 +290,7 @@ export function RosterModal({ onClose, onSubmit }: RosterModalProps) {
             </button>
             <button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? <span className="spinner spinner-light" /> : null}
-              {saving ? "Creating…" : "Create roster"}
+              {saving ? "Saving…" : isEdit ? "Save changes" : "Create roster"}
             </button>
           </div>
         </form>

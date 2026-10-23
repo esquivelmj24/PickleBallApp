@@ -75,6 +75,7 @@ export function Dashboard({
   const [toast, setToast] = useState<ToastState>(null);
   const [sampleLoading, setSampleLoading] = useState(false);
   const [rosterModalOpen, setRosterModalOpen] = useState(false);
+  const [editRosterOpen, setEditRosterOpen] = useState(false);
   const [joiningRosterId, setJoiningRosterId] = useState<string | null>(null);
 
   const loadState = useCallback(
@@ -316,6 +317,24 @@ export function Dashboard({
     }, 80);
   }
 
+  async function handleUpdateRoster(payload: RosterFormValues) {
+    if (!activeRoster) return;
+
+    await apiRequest(`/api/rosters/${activeRoster.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: payload.name,
+        location: payload.location,
+        date: payload.date,
+        startTime: payload.startTime,
+        endTime: payload.endTime,
+      }),
+    });
+    setEditRosterOpen(false);
+    await loadState();
+    showToast(`${payload.name} updated.`);
+  }
+
   async function handleEndRoster() {
     if (!activeRoster) return;
 
@@ -532,6 +551,7 @@ export function Dashboard({
               isAdmin={isAdmin}
               joiningId={joiningRosterId}
               onJoin={handleJoinRoster}
+              onEditRoster={() => setEditRosterOpen(true)}
               onEndRoster={() => setEndRosterOpen(true)}
             />
 
@@ -747,6 +767,22 @@ export function Dashboard({
         <RosterModal
           onClose={() => setRosterModalOpen(false)}
           onSubmit={handleCreateRoster}
+        />
+      ) : null}
+
+      {isAdmin && editRosterOpen && activeRoster ? (
+        <RosterModal
+          mode="edit"
+          initialValues={{
+            name: activeRoster.name,
+            location: activeRoster.location,
+            date: activeRoster.date,
+            startTime: activeRoster.startTime,
+            endTime: activeRoster.endTime,
+            capacity: activeRoster.capacity,
+          }}
+          onClose={() => setEditRosterOpen(false)}
+          onSubmit={handleUpdateRoster}
         />
       ) : null}
 
