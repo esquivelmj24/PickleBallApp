@@ -153,3 +153,42 @@ export function RecentResults({ matches }: { matches: Match[] }) {
     </section>
   );
 }
+
+export function TopWinRate({ players }: { players: Player[] }) {
+  return (
+    <section className="panel win-rate-panel" aria-labelledby="win-rate-title">
+      <div className="panel-head">
+        <div className="section-mark">
+          <SparklesIcon size={18} />
+        </div>
+        <div>
+          <span className="eyebrow">Performance</span>
+          <h2 id="win-rate-title">Top 20 win rates</h2>
+        </div>
+      </div>
+
+      {players.length === 0 ? (
+        <div className="win-rate-empty">
+          <p className="empty-copy">Ranks appear as soon as players complete games.</p>
+        </div>
+      ) : (
+        <div className="win-rate-list">
+          {players.map((player, index) => (
+            <div className="win-rate-row" key={player.id}>
+              <span className="win-rate-rank">{index + 1}</span>
+              <Avatar name={player.name} size="sm" />
+              <div className="win-rate-player">
+                <strong>{player.name}</strong>
+                <span>{player.levelLabel}</span>
+              </div>
+              <div className="win-rate-value">
+                <strong>{player.winRate}%</strong>
+                <span>{player.wins}W / {player.gamesPlayed}G</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}

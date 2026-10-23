@@ -16,7 +16,7 @@ import { ProfileImageCard } from "./ProfileImageCard";
 import { RosterDetail } from "./RosterDetail";
 import { RosterModal, type RosterFormValues } from "./RosterModal";
 import { RosterPanel } from "./RosterPanel";
-import { LevelGuide, RecentResults, TopFive } from "./SidePanels";
+import { LevelGuide, RecentResults, TopFive, TopWinRate } from "./SidePanels";
 import { ThemeSwitcher } from "./ThemeSwitcher";
 import {
   AlertIcon,
@@ -685,6 +685,7 @@ export function Dashboard({
 
               <aside className="side-column">
                 <TopFive players={state.topPlayers} />
+                <TopWinRate players={state.topWinRatePlayers} />
                 <LevelGuide tiers={state.tiers} total={stats.totalPlayers} />
                 <RecentResults matches={state.recentMatches} />
               </aside>

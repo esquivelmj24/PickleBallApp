@@ -88,6 +88,7 @@ async function buildBoardState(
     activeRound,
     recentMatches: recentDocs.map(serializeMatch),
     topPlayers: rankPlayers(players).slice(0, 5),
+    topWinRatePlayers: [...players].sort((a, b) => b.winRate - a.winRate || b.gamesPlayed - a.gamesPlayed || a.name.localeCompare(b.name)).slice(0, 20),
     tiers,
     stats: {
       totalPlayers: players.length,
@@ -110,6 +111,7 @@ function emptyBoardState(viewer: Viewer, rosters: Roster[]): AppState {
     activeRound: null,
     recentMatches: [],
     topPlayers: [],
+    topWinRatePlayers: [],
     tiers: levelCounts([]),
     stats: {
       totalPlayers: 0,

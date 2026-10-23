@@ -6116,3 +6116,90 @@ a {
     gap: 0;
   }
 }
+
+/* Win Rate Leaderboard */
+.win-rate-panel {
+  background: rgba(255, 253, 247, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 26px;
+}
+
+.win-rate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.win-rate-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 15px;
+  transition: background 160ms ease;
+}
+
+.win-rate-row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.win-rate-rank {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  width: 20px;
+  text-align: center;
+}
+
+.win-rate-player {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.win-rate-player strong {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.win-rate-player span {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.win-rate-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.win-rate-value strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--forest);
+}
+
+.win-rate-value span {
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.win-rate-empty {
+  text-align: center;
+  padding: 24px;
+}
+
+.win-rate-empty .empty-copy {
+  font-size: 12px;
+  color: var(--muted);
+}

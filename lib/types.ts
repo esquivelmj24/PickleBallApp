@@ -107,6 +107,7 @@ export type AppState = {
   } | null;
   recentMatches: Match[];
   topPlayers: Player[];
+  topWinRatePlayers: Player[];
   tiers: TierCount[];
   stats: {
     totalPlayers: number;
