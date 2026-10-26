@@ -8,6 +8,7 @@ Manual test cases for the account registration flow at `/register`.
 | --- | --- | --- | --- | --- |
 | [TC-001](./TC-001-register-valid-details.md) | Register using valid details | Positive | Account created, signed in, dashboard shown | Not run |
 | [TC-002](./TC-002-register-invalid-password.md) | Register using invalid password | Negative | Registration rejected with password error, no account created | Not run |
+| [TC-003](./TC-003-register-empty-fields.md) | Register using empty fields | Negative | Submission blocked, specific per-field error shown, no account created | Not run |
 
 ## Application under test
 
@@ -36,6 +37,13 @@ Source of truth: `app/api/auth/register/route.ts`, `lib/auth.ts`, `components/Au
 | Alias uniqueness | — | Case-insensitive `aliasKey` is unique | `That alias is already registered. Choose another one.` (HTTP 409) |
 
 Response codes: `201` created, `400` validation failure, `409` duplicate alias, `500` server error.
+
+### Validation order (two layers)
+
+1. **Client gate** (`components/AuthForm.tsx`) — runs on submit, before any request: role → rate → gender. Failures here never reach the API.
+2. **Server** (`app/api/auth/register/route.ts`) — runs on every request, including direct API calls: alias → password → role → rate → gender.
+
+The form uses `noValidate`, so the `required`/`minLength` HTML attributes never block submission and never show native tooltips; all feedback comes from the app's own alert region (`role="alert"`).
 
 ## Conventions
 
