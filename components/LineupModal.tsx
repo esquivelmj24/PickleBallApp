@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { averageRating } from "@/lib/format";
 import type { Match, Player } from "@/lib/types";
 import { Avatar } from "./Avatar";
-import { AlertIcon, CheckIcon, LockIcon, XIcon, ShuffleIcon } from "./icons";
+import { AlertIcon, CheckIcon, LockIcon, XIcon, ShuffleIcon, RotateIcon } from "./icons";
 
 type LineupModalProps = {
   match: Match;
@@ -90,7 +90,13 @@ export function LineupModal({
     setSlot(slot, randomPlayer.id);
   }
 
-  async function handleSubmit(event: React.FormEvent) {
+  
+  function handleSwapTeams() {
+    setTeam1([...team2]);
+    setTeam2([...team1]);
+  }
+
+async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
     if (new Set(currentIds).size !== 4 || currentIds.has("")) {
@@ -218,7 +224,12 @@ export function LineupModal({
             <button type="button" className="btn btn-ghost" onClick={onClose} disabled={saving}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary" disabled={saving}>
+            
+            <button type="button" className="btn btn-outline btn-small" onClick={handleSwapTeams} disabled={saving}>
+              <RotateIcon size={16} />
+              Swap Teams
+            </button>
+<button type="submit" className="btn btn-primary" disabled={saving}>
               {saving ? <span className="spinner" aria-hidden /> : <CheckIcon size={18} />}
               {saving ? "Saving…" : "Save lineup"}
             </button>
