@@ -80,7 +80,21 @@ export function LineupModal({
     return slot.team === 1 ? team1[slot.index] : team2[slot.index];
   }
 
-  function randomizeSlot(slot: Slot) {
+  
+  function switchPlayer(slot: Slot) {
+    const p1 = team1[slot.index];
+    const p2 = team2[slot.index];
+    
+    const nextT1 = [...team1];
+    const nextT2 = [...team2];
+    
+    nextT1[slot.index] = p2;
+    nextT2[slot.index] = p1;
+    
+    setTeam1(nextT1);
+    setTeam2(nextT2);
+  }
+function randomizeSlot(slot: Slot) {
     const available = players.filter(
       (p) => !currentIds.has(p.id) || p.id === getSlotValue(slot)
     );
@@ -190,7 +204,7 @@ async function handleSubmit(event: React.FormEvent) {
                         {value && selectedPlayerMap.get(value) ? (
                           <div className="lineup-preview">
                             <Avatar name={selectedPlayerMap.get(value)!.name} size="xs" />
-                            <span>{selectedPlayerMap.get(value)!.levelLabel}</span>
+                            <span>{selectedPlayerMap.get(value)!.levelLabel}</span> <button type="button" className="icon-btn btn-ghost" onClick={() => switchPlayer(slot)} title="Switch to other team" style={{ padding: "2px", marginLeft: "4px" }}><RotateIcon size={12} /></button>
                             {occupiedByCourt.get(value) ? (
                               <span className="lock-note"><LockIcon size={12} /> In use</span>
                             ) : null}
