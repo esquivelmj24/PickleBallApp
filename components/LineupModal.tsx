@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { averageRating } from "@/lib/format";
 import type { Match, Player } from "@/lib/types";
 import { Avatar } from "./Avatar";
-import { AlertIcon, CheckIcon, LockIcon, XIcon } from "./icons";
+import { AlertIcon, CheckIcon, LockIcon, XIcon, ShuffleIcon } from "./icons";
 
 type LineupModalProps = {
   match: Match;
@@ -78,6 +78,16 @@ export function LineupModal({
 
   function getSlotValue(slot: Slot) {
     return slot.team === 1 ? team1[slot.index] : team2[slot.index];
+  }
+
+  function randomizeSlot(slot: Slot) {
+    const available = players.filter(
+      (p) => !currentIds.has(p.id) || p.id === getSlotValue(slot)
+    );
+    if (available.length === 0) return;
+
+    const randomPlayer = available[Math.floor(Math.random() * available.length)];
+    setSlot(slot, randomPlayer.id);
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -162,7 +172,15 @@ export function LineupModal({
                               );
                             })}
                           </select>
-                        </div>
+                            <button
+                              type="button"
+                              className="shuffle-btn"
+                              onClick={() => randomizeSlot(slot)}
+                              title="Randomly replace player"
+                            >
+                              <ShuffleIcon size={14} />
+                            </button>
+                          </div>
                         {value && selectedPlayerMap.get(value) ? (
                           <div className="lineup-preview">
                             <Avatar name={selectedPlayerMap.get(value)!.name} size="xs" />
