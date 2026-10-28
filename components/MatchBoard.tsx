@@ -939,6 +939,8 @@ export function MatchBoard({
               saving={savingMatchId === match.id}
               onSaveScore={handleScore}
               onEditLineup={onEditLineup}
+              onSwapTeam={handleSwapTeam}
+              viewerPlayerId={viewerPlayerId}
               readOnly={readOnly}
             />
           ))}
