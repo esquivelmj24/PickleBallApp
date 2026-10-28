@@ -318,7 +318,8 @@ export function MatchBoard({
   onAddNextLineup,
   onSaveScore,
   onEditLineup,
-  onAddPlayer,
+  onSwapTeam,
+  viewerPlayerId,  onAddPlayer,
   onReset,
   readOnly = false,
 }: MatchBoardProps) {
@@ -939,7 +940,7 @@ export function MatchBoard({
               saving={savingMatchId === match.id}
               onSaveScore={handleScore}
               onEditLineup={onEditLineup}
-              onSwapTeam={handleSwapTeam}
+              onSwapTeam={onSwapTeam}
               viewerPlayerId={viewerPlayerId}
               readOnly={readOnly}
             />
