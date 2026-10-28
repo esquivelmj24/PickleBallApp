@@ -304,6 +304,19 @@ async function handleLogout() {
     );
   }
 
+  async function handleSwapTeam(matchId: string, playerId: string) {
+    try {
+      await apiRequest(`/api/matches/${matchId}/swap-team`, {
+        method: "POST",
+        body: JSON.stringify({ playerId }),
+      });
+      await loadState();
+      showToast("Teams swapped successfully.");
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Could not swap teams.", "error");
+    }
+  }
+
   async function handleSaveScore(matchId: string, team1Score: number, team2Score: number) {
     await apiRequest(`/api/matches/${matchId}/score`, {
       method: "POST",
@@ -460,6 +473,7 @@ async function handleLogout() {
   }
 
   const { stats } = state;
+  const viewerPlayerId = state.viewer.playerId;
   const openRosterCount = state.rosters.filter((roster) => !roster.full).length;
 
   return (
@@ -679,6 +693,8 @@ async function handleLogout() {
                   onAddNextLineup={handleAddNextLineup}
                   onSaveScore={handleSaveScore}
                   onEditLineup={setLineupMatch}
+                  onSwapTeam={handleSwapTeam}
+                  viewerPlayerId={viewerPlayerId}
                   onAddPlayer={() => setPlayerModal({ mode: "add" })}
                   onReset={() => setResetGameOpen(true)}
                   readOnly={!isAdmin}

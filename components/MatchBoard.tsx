@@ -28,6 +28,8 @@ type MatchBoardProps = {
   onAddNextLineup: () => Promise<void>;
   onSaveScore: (matchId: string, team1Score: number, team2Score: number) => Promise<void>;
   onEditLineup: (match: Match) => void;
+  onSwapTeam: (matchId: string, playerId: string) => Promise<void>;
+  viewerPlayerId?: string;
   onAddPlayer: () => void;
   onReset: () => void;
   readOnly?: boolean;
@@ -40,6 +42,8 @@ type CourtCardProps = {
   saving: boolean;
   onSaveScore: (matchId: string, team1Score: number, team2Score: number) => Promise<void>;
   onEditLineup: (match: Match) => void;
+  onSwapTeam: (matchId: string, playerId: string) => Promise<void>;
+  viewerPlayerId?: string;
   readOnly: boolean;
 };
 
@@ -50,6 +54,8 @@ function CourtCard({
   saving,
   onSaveScore,
   onEditLineup,
+  onSwapTeam,
+  viewerPlayerId,
   readOnly,
 }: CourtCardProps) {
   const [score1, setScore1] = useState(match.team1Score?.toString() ?? "");
@@ -261,7 +267,21 @@ function CourtCard({
                 {saving ? "Saving…" : completed ? "Update" : "Save result"}
               </button>
             </div>
-            {!completed ? (
+                  {viewerPlayerId && [...match.team1, ...match.team2].some(p => p.playerId === viewerPlayerId) && (
+                    <button
+                      type="button"
+                      className="lineup-btn btn-outline"
+                      onClick={() => {
+                        const playerId = viewerPlayerId!;
+                        void onSwapTeam(match.id, playerId);
+                      }}
+                      title="Swap to the other team"
+                    >
+                      <RotateIcon size={14} />
+                      Swap Team
+                    </button>
+                  )}
+                  {!completed ? (
               <button
                 type="button"
                 className="lineup-btn"
